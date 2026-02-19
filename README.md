@@ -1,148 +1,197 @@
 # AI CLI
 
-A Go command-line tool that translates natural language into shell commands using LLMs (OpenAI and OpenRouter). It detects your OS and shell, generates appropriate commands, assesses risk, and optionally auto-executes safe commands.
+AI CLI translates natural language into shell commands using LLMs (OpenAI or OpenRouter), then applies a safety policy before execution.
 
-## Build, Test, and Install (go-task)
+## Important Safety Warning
 
-Requires Go 1.25+ and `go-task`.
+LLMs are non-deterministic. The same prompt can produce different commands across runs.
 
-Install `task` once:
+Always review and understand every command before you approve or run it. Treat generated commands as untrusted suggestions, especially for file operations, process control, networking, and anything requiring elevated permissions.
+
+## Quick Start (Users)
+
+### 1) Install from GitHub Release Artifacts
+
+Each release publishes prebuilt artifacts for macOS, Linux, and Windows.
+
+Artifact names:
+
+- `ai-vX.Y.Z-darwin-amd64.tar.gz`
+- `ai-vX.Y.Z-linux-amd64.tar.gz`
+- `ai-vX.Y.Z-windows-amd64.zip`
+
+Download from your release page:
+
+- `https://github.com/kriserickson/ai-cli/releases`
+
+Install on macOS/Linux:
 
 ```sh
-go install github.com/go-task/task/v3/cmd/task@latest
+# Example for Linux v0.2.0
+curl -LO https://github.com/kriserickson/ai-cli/releases/download/v0.1.0/ai-v0.1.0-linux-amd64.tar.gz
+tar -xzf ai-v0.1.0-linux-amd64.tar.gz
+chmod +x ai
+sudo mv ai /usr/local/bin/ai
+ai version
 ```
 
-Then make sure your Go bin directory is on `PATH`:
+Install on Windows (PowerShell):
 
-- Windows: `%USERPROFILE%\go\bin`
-- macOS / Linux: `$HOME/go/bin`
-echo 'export PATH="$PATH:$HOME/go/bin"' >> ~/.zshrc
-source ~/.zshrc
-Common project commands:
-
-```sh
-task             # build + test
-task build       # dist/<os>/ai
-task test
-task test:verbose
-task test:pkg PKG=./internal/llm/...
-task install
-```
-
-`task install` copies the built binary from `dist/<os>/` into an OS-specific PATH directory.
-
-Default install targets:
-
-- Windows: `%USERPROFILE%\go\bin`
-- macOS / Linux: `/usr/local/bin`
-
-Override the install target:
-
-**macOS / Linux:**
-```sh
-task install INSTALL_DIR="$HOME/.local/bin"
-```
-
-**Windows (PowerShell):**
 ```powershell
-task install INSTALL_DIR="$env:USERPROFILE\tools\bin"
+# Example for Windows v0.2.0
+Invoke-WebRequest -Uri "https://github.com/kriserickson/ai-cli/releases/download/v0.2.0/ai-v0.2.0-windows-amd64.zip" -OutFile "ai-v0.2.0-windows-amd64.zip"
+Expand-Archive -Path "ai-v0.2.0-windows-amd64.zip" -DestinationPath ".\\ai"
+Move-Item ".\\ai\\ai.exe" "$env:USERPROFILE\\go\\bin\\ai.exe" -Force
+ai.exe version
 ```
 
-## Quick Start
+### 2) Run Setup and Health Checks First
 
-The easiest way to get started is `ai doctor` — it checks your configuration and runs the interactive setup wizard if no API key is found:
+Use `ai doctor` as the first command. It verifies config and launches setup if your API key is missing.
 
 ```sh
-task install
 ai doctor
 ```
 
-Or set everything up manually:
+Typical flow:
 
-**macOS / Linux:**
-```sh
-# Set your API key
-./ai config set openai_key sk-your-key-here
-./ai config set provider openai
+- validates config file location
+- checks selected provider and model
+- checks API key presence
+- starts setup wizard if needed
 
-# Or use OpenRouter
-./ai config set openrouter_key sk-or-your-key-here
-./ai config set provider openrouter
-./ai config set model anthropic/claude-3.5-sonnet
+### 3) Run Your First Commands
 
-# Single-shot mode
-./ai list files in current directory
-./ai find all go files larger than 1MB
-./ai kill the process on port 8080
-
-# Interactive mode (no arguments)
-./ai
-```
-
-**Windows (PowerShell or cmd):**
-```sh
-# Set your API key
-ai.exe config set openai_key sk-your-key-here
-ai.exe config set provider openai
-
-# Or use OpenRouter
-ai.exe config set openrouter_key sk-or-your-key-here
-ai.exe config set provider openrouter
-ai.exe config set model anthropic/claude-3.5-sonnet
-
-# Single-shot mode
-ai.exe list files in current directory
-ai.exe find all go files larger than 1MB
-
-# Interactive mode (no arguments)
-ai.exe
-```
-
-## Usage
-
-### Single-Shot Mode
-
-Pass your instruction as arguments:
+Single-shot examples:
 
 ```sh
-./ai <natural language instruction>
+ai list files in current directory sorted by size
+ai find all files larger than 10MB
+ai show what process is using port 8080
 ```
 
-The tool sends your instruction to the configured LLM along with your OS, shell, and working directory context. The LLM returns one or more shell commands which are displayed with a risk assessment and certainty score before execution.
+Interactive mode:
 
-```
-$ ./ai show disk usage sorted by size
-
-Show disk usage of current directory sorted by size
-  $ du -sh * | sort -rh  [safe] 92% certainty
+```sh
+ai
 ```
 
-### Interactive Mode
+Then type requests one by one:
 
-Run with no arguments to enter a readline-powered REPL with command history:
-
-```
-$ ./ai
-AI CLI interactive mode. Type 'exit' or 'quit' to leave.
+```text
 ai> what ports are listening
-ai> compress all log files in /var/log
-ai> exit
-Bye!
+ai> compress all log files in /var/log older than 7 days
+ai> show biggest folders in my home directory
 ```
 
-History is saved to `~/.ai-cli/history`.
+## How Command Execution Safety Works
 
-### Configuration
+Every generated command has:
 
-Configuration is stored in `~/.ai-cli/config.toml` and created with defaults on first run.
+- `risk`: `safe` or `risky`
+- `certainty`: 0-100
+
+Decision matrix:
+
+| Risk | Whitelisted | Certainty >= threshold | Action |
+|------|-------------|------------------------|--------|
+| safe | any | yes | Auto-execute |
+| safe | any | no | Ask confirmation |
+| risky | yes | yes | Auto-execute |
+| risky | yes | no | Ask confirmation |
+| risky | no | any | Ask confirmation |
+
+When `always_confirm=true`, every command asks first.
+
+Default whitelist prefixes:
+
+- `git`
+- `ls`
+- `cat`
+- `echo`
+- `pwd`
+- `head`
+- `tail`
+- `wc`
+- `grep`
+- `find`
+- `which`
+- `man`
+
+## Restrict or Expand Auto-Run Behavior
+
+### Restrict auto-run (safer)
+
+Force confirmation for everything:
 
 ```sh
-./ai config show            # Show full config
-./ai config get <key>       # Get a single value
-./ai config set <key> <val> # Set a value
+ai config set always_confirm true
 ```
 
-Available config keys:
+Increase certainty required for auto-run:
+
+```sh
+ai config set min_certainty 95
+```
+
+### Turn auto-run on more aggressively
+
+Allow auto-run decisions from the safety matrix:
+
+```sh
+ai config set always_confirm false
+```
+
+Lower certainty threshold:
+
+```sh
+ai config set min_certainty 60
+```
+
+Important:
+
+- non-whitelisted risky commands still prompt even with low threshold
+- to allow risky commands to auto-run, command prefix must be whitelisted
+
+### Whitelist control
+
+Current CLI supports reading whitelist via config output, but not setting it directly with `ai config set`.
+
+To customize whitelist prefixes, edit `~/.ai-cli/config.toml`:
+
+```toml
+[safety]
+always_confirm = false
+min_certainty = 80
+whitelist_prefixes = ["git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"]
+```
+
+After editing, run:
+
+```sh
+ai status
+```
+
+## Common User Commands
+
+```sh
+ai status
+ai doctor
+ai set-model
+ai version
+ai config show
+ai config get provider
+ai config set provider openai
+ai config set openai_key sk-your-key-here
+```
+
+## Configuration
+
+Configuration file location:
+
+- `~/.ai-cli/config.toml`
+
+Available `ai config get/set` keys:
 
 | Key | Description | Default |
 |-----|-------------|---------|
@@ -156,99 +205,30 @@ Available config keys:
 | `min_certainty` | Auto-execute threshold (0-100) | `80` |
 | `debug` | Debug mode (`none`, `screen`, `file`) | `none` |
 
-### Status, Doctor, and Model Selection
+Notes:
 
-#### `ai status`
+- `whitelist_prefixes` exists in config but is currently edited directly in `config.toml`
+- `ai config get openai_key` and `ai config get openrouter_key` return masked values
 
-Prints a one-line snapshot of the current installation:
-
-```
-$ ./ai status
-ai-cli v0.1.0
-Config:   /home/user/.ai-cli/config.toml  ✓ exists
-Log:      /home/user/.ai-cli/llm.log      — not created yet
-Provider: openrouter
-Model:    anthropic/claude-3.5-sonnet
-API Key:  not set
-```
-
-The API key is shown masked (e.g. `sk-or-****...1234`) if set, or highlighted in red if missing.
-
-#### `ai doctor`
-
-Runs a health check and automatically launches the setup wizard if no API key is configured:
-
-```
-$ ./ai doctor
-Checking configuration...
-  ✓ Config file: /home/user/.ai-cli/config.toml
-  ✗ API key: No API key configured for openrouter
-    Running setup wizard...
-    ...
-  ✓ Model: anthropic/claude-3.5-sonnet
-All checks passed!
-```
-
-If the API key is already set, doctor simply confirms everything is in order without prompting.
-
-#### `ai set-model`
-
-Opens the interactive wizard to pick a new provider and model at any time — useful when you want to switch between OpenAI and OpenRouter or try a different model:
+## Debugging
 
 ```sh
-./ai set-model
+# Persisted config
+ai config set debug screen
+ai config set debug file
+
+# Per-command override
+ai --debug list files
+ai --debug=screen list files
+ai --debug=file list files
 ```
 
-The wizard always asks for the provider first, then prompts for an API key only if one isn't already saved, then shows an arrow-key selector to choose the model. For OpenRouter the model list is grouped by company; for OpenAI it shows GPT models sorted newest-first. The selection is saved to config when you confirm.
+## Multi-Step Commands
 
-### Self-Configuration via Natural Language
+For complex requests, AI CLI may return multiple commands. They run sequentially and stop on first failure.
 
-You can change settings by asking in natural language:
-
-```sh
-./ai change model to gpt-4o
-./ai switch to openai provider
-```
-
-The tool will show the proposed config change and ask for confirmation before applying.
-
-### Debugging
-
-Debug mode logs the full JSON request sent to the LLM API and the raw response.
-
-```sh
-# Set persistently
-./ai config set debug screen   # Print to stderr
-./ai config set debug file     # Append to ~/.ai-cli/llm.log
-
-# Or override per-invocation
-./ai --debug list files          # prints to stderr (default)
-./ai --debug=screen list files   # same as above
-./ai --debug=file list files     # appends to ~/.ai-cli/llm.log
-```
-
-## Safety System
-
-Every command returned by the LLM includes a **risk** level (`safe` or `risky`) and a **certainty** percentage. These determine whether the command auto-executes or requires confirmation:
-
-| Risk | Whitelisted | Certainty >= threshold | Action |
-|------|-------------|------------------------|--------|
-| safe | any | yes | Auto-execute |
-| safe | any | no | Ask confirmation |
-| risky | yes | yes | Auto-execute |
-| risky | yes | no | Ask confirmation |
-| risky | no | any | Ask confirmation |
-
-When `always_confirm` is `true`, every command prompts regardless.
-
-The default whitelist includes: `git`, `ls`, `cat`, `echo`, `pwd`, `head`, `tail`, `wc`, `grep`, `find`, `which`, `man`.
-
-### Multi-Step Commands
-
-For complex requests, the LLM may return multiple commands that execute sequentially. Execution stops on the first failure.
-
-```
-$ ./ai kill the process on port 8080
+```text
+$ ai kill the process on port 8080
 
 [1/2] Find PID on port 8080
   $ lsof -ti :8080  [safe] 95% certainty
@@ -257,9 +237,77 @@ $ ./ai kill the process on port 8080
 Execute? [Y/n]
 ```
 
-## Testing
+## Developer Guide
 
-Use go-task:
+### Build, Test, and Install (go-task)
+
+Requires Go 1.25+ and `go-task`.
+
+Install `task` once:
+
+```sh
+go install github.com/go-task/task/v3/cmd/task@latest
+```
+
+Ensure your Go bin directory is in `PATH`:
+
+- Windows: `%USERPROFILE%\\go\\bin`
+- macOS/Linux: `$HOME/go/bin`
+
+Example for zsh:
+
+```sh
+echo 'export PATH="$PATH:$HOME/go/bin"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Common commands:
+
+```sh
+task             # build + test
+task build       # dist/<os>/ai
+task test
+task test:verbose
+task test:pkg PKG=./internal/llm/...
+task install
+```
+
+`task install` copies from `dist/<os>/` into:
+
+- Windows: `%USERPROFILE%\\go\\bin`
+- macOS/Linux: `/usr/local/bin`
+
+Override install target:
+
+```sh
+task install INSTALL_DIR="$HOME/.local/bin"
+```
+
+Windows (PowerShell):
+
+```powershell
+task install INSTALL_DIR="$env:USERPROFILE\\tools\\bin"
+```
+
+### Versioning and Releases
+
+Version is injected at build time using ldflags. Default value in source is `dev`.
+
+Create a release:
+
+```sh
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Tag push triggers GitHub Actions to:
+
+- run tests
+- build cross-platform artifacts
+- create a GitHub Release
+- upload artifacts to the release
+
+### Testing
 
 ```sh
 task test
@@ -270,34 +318,20 @@ task test:pkg PKG=./internal/config/...
 task test:pkg PKG=./internal/shell/...
 ```
 
-### Test Coverage
+### Project Structure
 
-| Package | Test File | What's Tested |
-|---------|-----------|---------------|
-| `internal/executor` | `safety_test.go` | Safety matrix (all risk/certainty/whitelist combinations), `always_confirm` override, whitelist prefix matching including edge cases (partial prefix matches, leading whitespace, empty input) |
-| `internal/llm` | `parse_test.go` | JSON response parsing: plain JSON, markdown-fenced JSON (with and without language tag), whitespace handling, config-type responses, multi-command responses, invalid JSON, empty input |
-| `internal/llm` | `client_test.go` | Client creation (missing API key, unknown provider), HTTP integration via httptest (successful chat, API errors, empty choices), debug output capture |
-| `internal/llm` | `models_test.go` | `FetchOpenRouterModels` (company extraction, "Other" fallback, HTTP errors), `FetchOpenAIModels` (gpt-* filter, created-desc sort, Bearer auth, HTTP errors), `GroupByCompany` (alphabetical groups, model order preserved, nil input) |
-| `internal/llm` | `prompt_test.go` | System prompt contains environment info (OS, shell, version, cwd) and required JSON structure instructions |
-| `internal/config` | `config_test.go` | Default config values, save/load round-trip using temp dir, auto-creation of default config on first load, TOML marshal/unmarshal round-trip |
-| `internal/shell` | `detect_test.go` | OS detection matches runtime, shell/version detection returns non-empty values, `shellBaseName` with Unix and Windows paths, `ShellCommand` args for zsh/bash/powershell/cmd |
-
-The LLM client tests use `net/http/httptest` to run a local HTTP server, so they don't require an API key or network access.
-
-## Project Structure
-
-```
+```text
 ai-cli/
-├── main.go                      # Entry point
-├── go.mod                       # Go module (cobra, go-toml, readline, color, survey)
+├── main.go
+├── go.mod
 ├── cmd/
-│   ├── root.go                  # Root command: single-shot and interactive mode routing
-│   ├── config.go                # `ai config show/get/set` subcommands
-│   ├── version.go               # `ai version` subcommand
-│   ├── status.go                # `ai status` — configuration snapshot
-│   ├── doctor.go                # `ai doctor` — health check + setup wizard trigger
-│   ├── setmodel.go              # `ai set-model` — interactive provider/model picker
-│   └── wizard.go                # Shared interactive wizard (survey-based selectors)
+│   ├── root.go
+│   ├── config.go
+│   ├── version.go
+│   ├── status.go
+│   ├── doctor.go
+│   ├── setmodel.go
+│   └── wizard.go
 └── internal/
     ├── config/
     │   ├── config.go            # TOML config load/save/defaults (~/.ai-cli/config.toml)
@@ -319,21 +353,4 @@ ai-cli/
     │   ├── detect.go            # OS, shell, version detection
     │   └── detect_test.go
     └── interactive/
-        └── repl.go              # Readline REPL with history
 ```
-
-### Key Design Decisions
-
-- **No OpenAI SDK** — uses raw `net/http` since the chat completions API is simple and OpenRouter is wire-compatible.
-- **Strict JSON responses** — the system prompt instructs the LLM to return structured JSON. A fallback strips markdown code fences if the LLM wraps the response.
-- **Shell-aware execution** — commands run via the detected shell (`zsh -c`, `bash -c`, `powershell -Command`, `cmd /c`) so shell features like pipes, globs, and `$(...)` work correctly.
-
-## Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| [cobra](https://github.com/spf13/cobra) | CLI framework and subcommand routing |
-| [go-toml/v2](https://github.com/pelletier/go-toml) | TOML config file parsing |
-| [readline](https://github.com/chzyer/readline) | Interactive mode line editing and history |
-| [color](https://github.com/fatih/color) | Colored terminal output |
-| [survey/v2](https://github.com/AlecAivazis/survey) | Interactive arrow-key selectors and password prompts for the setup wizard |
