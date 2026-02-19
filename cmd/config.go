@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	toml "github.com/pelletier/go-toml/v2"
 	"github.com/kriserickson/ai-cli/internal/config"
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -115,11 +115,22 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 	case "openrouter_url":
 		cfg.Provider.OpenRouter.BaseURL = value
 	case "always_confirm":
-		cfg.Safety.AlwaysConfirm = value == "true"
+		lower := strings.ToLower(strings.TrimSpace(value))
+		switch lower {
+		case "true":
+			cfg.Safety.AlwaysConfirm = true
+		case "false":
+			cfg.Safety.AlwaysConfirm = false
+		default:
+			return fmt.Errorf("always_confirm must be 'true' or 'false'")
+		}
 	case "min_certainty":
 		n, err := strconv.Atoi(value)
 		if err != nil {
 			return fmt.Errorf("min_certainty must be a number: %w", err)
+		}
+		if n < 0 || n > 100 {
+			return fmt.Errorf("min_certainty must be between 0 and 100")
 		}
 		cfg.Safety.MinCertainty = n
 	case "debug":

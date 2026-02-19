@@ -60,6 +60,14 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Fatalf("config file not created: %v", err)
 	}
 
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat config file: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0600 {
+		t.Errorf("config file mode = %o, want %o", got, 0600)
+	}
+
 	loaded, err := Load()
 	if err != nil {
 		t.Fatalf("Load error: %v", err)
