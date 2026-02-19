@@ -32,19 +32,19 @@ jobs:
     name: Build ${{ matrix.goos }}
     runs-on: ubuntu-latest
     needs: test
+    # Update your matrix in build.yml
     strategy:
-      fail-fast: false
       matrix:
         include:
           - goos: linux
             goarch: amd64
             artifact_ext: tar.gz
           - goos: darwin
-            goarch: amd64
+            goarch: amd64 # Intel Macs
             artifact_ext: tar.gz
-          - goos: windows
-            goarch: amd64
-            artifact_ext: zip
+          - goos: darwin
+            goarch: arm64 # Apple Silicon Macs
+            artifact_ext: tar.gz
 
     steps:
       - name: Checkout
