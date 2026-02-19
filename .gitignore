@@ -3,7 +3,6 @@
 # https://github.com/github/gitignore/blob/main/community/Golang/Go.AllowList.gitignore
 #
 # Binaries for programs and plugins
-ai
 *.exe
 *.exe~
 *.dll
@@ -12,6 +11,12 @@ ai
 
 # Test binary, built with `go test -c`
 *.test
+
+# Cache directory
+.gocache
+
+# Dist directory for built binaries
+dist/
 
 # Code coverage profiles and other test artifacts
 *.out

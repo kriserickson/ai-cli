@@ -44,6 +44,6 @@ tasks:
     deps:
       - build
     cmds:
-      - '{{if eq OS "windows"}}if not exist "{{.INSTALL_DIR}}" mkdir "{{.INSTALL_DIR}}"{{else}}mkdir -p "{{.INSTALL_DIR}}"{{end}}'
-      - '{{if eq OS "windows"}}copy /Y "{{.DIST_DIR}}/ai*" "{{.INSTALL_PATH}}" >nul{{else}}cp "{{.BIN_PATH}}" "{{.INSTALL_PATH}}" && chmod +x "{{.INSTALL_PATH}}"{{end}}'
+      - '{{if eq OS "windows"}}if not exist "{{.INSTALL_DIR}}" mkdir "{{.INSTALL_DIR}}"{{else}}mkdir -p "{{.INSTALL_DIR}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1){{end}}'
+      - '{{if eq OS "windows"}}copy /Y "{{.DIST_DIR}}/ai*" "{{.INSTALL_PATH}}" >nul{{else}}cp "{{.BIN_PATH}}" "{{.INSTALL_PATH}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1) && chmod +x "{{.INSTALL_PATH}}"{{end}}'
       - echo Installed "{{.APP_NAME}}" to "{{.INSTALL_PATH}}"

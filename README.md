@@ -16,7 +16,8 @@ Then make sure your Go bin directory is on `PATH`:
 
 - Windows: `%USERPROFILE%\go\bin`
 - macOS / Linux: `$HOME/go/bin`
-
+echo 'export PATH="$PATH:$HOME/go/bin"' >> ~/.zshrc
+source ~/.zshrc
 Common project commands:
 
 ```sh
