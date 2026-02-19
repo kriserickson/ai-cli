@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go test:*)",
+      "Bash(go build:*)",
+      "Bash(./ai.exe status:*)",
+      "Bash(./ai.exe:*)",
+      "Bash(go get:*)"
+    ]
+  }
+}

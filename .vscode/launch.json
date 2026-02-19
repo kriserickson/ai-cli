@@ -1,0 +1,75 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch ai-cli (package)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "args": [],
+      "envFile": "${workspaceFolder}/.env",
+      "showLog": true
+    },
+
+    {
+      "name": "Launch current file",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${file}"
+    },
+
+    {
+      "name": "Launch ai-cli — example subcommand (edit args)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}",
+      "args": ["serve", "--port", "8080"],
+      "env": {
+        "AI_CLI_ENV": "development"
+      }
+    },
+
+    {
+      "name": "Debug package tests (all)",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}"
+    },
+
+    {
+      "name": "Debug single test (edit -test.run)",
+      "type": "go",
+      "request": "launch",
+      "mode": "test",
+      "program": "${workspaceFolder}",
+      "args": ["-test.run", "TestName"]
+    },
+
+    {
+      "name": "Attach to running process",
+      "type": "go",
+      "request": "attach",
+      "processId": "${command:pickProcess}"
+    },
+
+    {
+      "name": "Attach to remote (dlv server)",
+      "type": "go",
+      "request": "attach",
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": 2345
+    }
+  ],
+
+  "compounds": [
+    {
+      "name": "Run + Tests",
+      "configurations": ["Launch ai-cli (package)", "Debug package tests (all)"]
+    }
+  ]
+}

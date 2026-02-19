@@ -38,11 +38,12 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestSaveAndLoad(t *testing.T) {
-	// Use a temp dir to avoid touching the real config
+	// Use a temp dir to avoid touching the real config.
+	// Set both HOME (Unix) and USERPROFILE (Windows) since os.UserHomeDir()
+	// uses different env vars per platform.
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
+	t.Setenv("USERPROFILE", tmpDir)
 
 	cfg := DefaultConfig()
 	cfg.Provider.Model = "gpt-4o"
@@ -77,9 +78,8 @@ func TestSaveAndLoad(t *testing.T) {
 
 func TestLoad_CreatesDefaultOnMissing(t *testing.T) {
 	tmpDir := t.TempDir()
-	origHome := os.Getenv("HOME")
 	t.Setenv("HOME", tmpDir)
-	defer os.Setenv("HOME", origHome)
+	t.Setenv("USERPROFILE", tmpDir)
 
 	cfg, err := Load()
 	if err != nil {

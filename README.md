@@ -6,12 +6,28 @@ A Go command-line tool that translates natural language into shell commands usin
 
 Requires Go 1.25+.
 
+**macOS / Linux:**
 ```sh
 go build -o ai .
 ```
 
+**Windows:**
+```sh
+go build -o ai.exe .
+```
+
 ## Quick Start
 
+The easiest way to get started is `ai doctor` — it checks your configuration and runs the interactive setup wizard if no API key is found:
+
+```sh
+./ai doctor      # macOS / Linux
+ai.exe doctor    # Windows
+```
+
+Or set everything up manually:
+
+**macOS / Linux:**
 ```sh
 # Set your API key
 ./ai config set openai_key sk-your-key-here
@@ -29,6 +45,25 @@ go build -o ai .
 
 # Interactive mode (no arguments)
 ./ai
+```
+
+**Windows (PowerShell or cmd):**
+```sh
+# Set your API key
+ai.exe config set openai_key sk-your-key-here
+ai.exe config set provider openai
+
+# Or use OpenRouter
+ai.exe config set openrouter_key sk-or-your-key-here
+ai.exe config set provider openrouter
+ai.exe config set model anthropic/claude-3.5-sonnet
+
+# Single-shot mode
+ai.exe list files in current directory
+ai.exe find all go files larger than 1MB
+
+# Interactive mode (no arguments)
+ai.exe
 ```
 
 ## Usage
@@ -89,6 +124,51 @@ Available config keys:
 | `min_certainty` | Auto-execute threshold (0-100) | `80` |
 | `debug` | Debug mode (`none`, `screen`, `file`) | `none` |
 
+### Status, Doctor, and Model Selection
+
+#### `ai status`
+
+Prints a one-line snapshot of the current installation:
+
+```
+$ ./ai status
+ai-cli v0.1.0
+Config:   /home/user/.ai-cli/config.toml  ✓ exists
+Log:      /home/user/.ai-cli/llm.log      — not created yet
+Provider: openrouter
+Model:    anthropic/claude-3.5-sonnet
+API Key:  not set
+```
+
+The API key is shown masked (e.g. `sk-or-****...1234`) if set, or highlighted in red if missing.
+
+#### `ai doctor`
+
+Runs a health check and automatically launches the setup wizard if no API key is configured:
+
+```
+$ ./ai doctor
+Checking configuration...
+  ✓ Config file: /home/user/.ai-cli/config.toml
+  ✗ API key: No API key configured for openrouter
+    Running setup wizard...
+    ...
+  ✓ Model: anthropic/claude-3.5-sonnet
+All checks passed!
+```
+
+If the API key is already set, doctor simply confirms everything is in order without prompting.
+
+#### `ai set-model`
+
+Opens the interactive wizard to pick a new provider and model at any time — useful when you want to switch between OpenAI and OpenRouter or try a different model:
+
+```sh
+./ai set-model
+```
+
+The wizard always asks for the provider first, then prompts for an API key only if one isn't already saved, then shows an arrow-key selector to choose the model. For OpenRouter the model list is grouped by company; for OpenAI it shows GPT models sorted newest-first. The selection is saved to config when you confirm.
+
 ### Self-Configuration via Natural Language
 
 You can change settings by asking in natural language:
@@ -110,8 +190,9 @@ Debug mode logs the full JSON request sent to the LLM API and the raw response.
 ./ai config set debug file     # Append to ~/.ai-cli/llm.log
 
 # Or override per-invocation
-./ai --debug screen list files
-./ai --debug file list files
+./ai --debug list files          # prints to stderr (default)
+./ai --debug=screen list files   # same as above
+./ai --debug=file list files     # appends to ~/.ai-cli/llm.log
 ```
 
 ## Safety System
@@ -174,6 +255,7 @@ go test ./internal/shell/...
 | `internal/executor` | `safety_test.go` | Safety matrix (all risk/certainty/whitelist combinations), `always_confirm` override, whitelist prefix matching including edge cases (partial prefix matches, leading whitespace, empty input) |
 | `internal/llm` | `parse_test.go` | JSON response parsing: plain JSON, markdown-fenced JSON (with and without language tag), whitespace handling, config-type responses, multi-command responses, invalid JSON, empty input |
 | `internal/llm` | `client_test.go` | Client creation (missing API key, unknown provider), HTTP integration via httptest (successful chat, API errors, empty choices), debug output capture |
+| `internal/llm` | `models_test.go` | `FetchOpenRouterModels` (company extraction, "Other" fallback, HTTP errors), `FetchOpenAIModels` (gpt-* filter, created-desc sort, Bearer auth, HTTP errors), `GroupByCompany` (alphabetical groups, model order preserved, nil input) |
 | `internal/llm` | `prompt_test.go` | System prompt contains environment info (OS, shell, version, cwd) and required JSON structure instructions |
 | `internal/config` | `config_test.go` | Default config values, save/load round-trip using temp dir, auto-creation of default config on first load, TOML marshal/unmarshal round-trip |
 | `internal/shell` | `detect_test.go` | OS detection matches runtime, shell/version detection returns non-empty values, `shellBaseName` with Unix and Windows paths, `ShellCommand` args for zsh/bash/powershell/cmd |
@@ -185,11 +267,15 @@ The LLM client tests use `net/http/httptest` to run a local HTTP server, so they
 ```
 ai-cli/
 ├── main.go                      # Entry point
-├── go.mod                       # Go module (cobra, go-toml, readline, color)
+├── go.mod                       # Go module (cobra, go-toml, readline, color, survey)
 ├── cmd/
 │   ├── root.go                  # Root command: single-shot and interactive mode routing
 │   ├── config.go                # `ai config show/get/set` subcommands
-│   └── version.go               # `ai version` subcommand
+│   ├── version.go               # `ai version` subcommand
+│   ├── status.go                # `ai status` — configuration snapshot
+│   ├── doctor.go                # `ai doctor` — health check + setup wizard trigger
+│   ├── setmodel.go              # `ai set-model` — interactive provider/model picker
+│   └── wizard.go                # Shared interactive wizard (survey-based selectors)
 └── internal/
     ├── config/
     │   ├── config.go            # TOML config load/save/defaults (~/.ai-cli/config.toml)
@@ -197,6 +283,8 @@ ai-cli/
     ├── llm/
     │   ├── client.go            # LLM HTTP client (OpenAI-compatible), debug logging
     │   ├── client_test.go
+    │   ├── models.go            # Model-list fetching (OpenRouter + OpenAI), GroupByCompany
+    │   ├── models_test.go
     │   ├── prompt.go            # System prompt template with OS/shell/cwd context
     │   ├── prompt_test.go
     │   ├── parse_test.go
@@ -226,3 +314,4 @@ ai-cli/
 | [go-toml/v2](https://github.com/pelletier/go-toml) | TOML config file parsing |
 | [readline](https://github.com/chzyer/readline) | Interactive mode line editing and history |
 | [color](https://github.com/fatih/color) | Colored terminal output |
+| [survey/v2](https://github.com/AlecAivazis/survey) | Interactive arrow-key selectors and password prompts for the setup wizard |

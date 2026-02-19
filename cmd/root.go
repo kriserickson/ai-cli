@@ -28,7 +28,9 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen or file (overrides config)")
+	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
+	// When --debug is given without a value, default to "screen"
+	rootCmd.Flags().Lookup("debug").NoOptDefVal = "screen"
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
