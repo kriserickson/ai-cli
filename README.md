@@ -144,6 +144,42 @@ $ ./ai kill the process on port 8080
 Execute? [Y/n]
 ```
 
+## Testing
+
+Run all tests:
+
+```sh
+go test ./...
+```
+
+Run with verbose output:
+
+```sh
+go test ./... -v
+```
+
+Run tests for a specific package:
+
+```sh
+go test ./internal/executor/...
+go test ./internal/llm/...
+go test ./internal/config/...
+go test ./internal/shell/...
+```
+
+### Test Coverage
+
+| Package | Test File | What's Tested |
+|---------|-----------|---------------|
+| `internal/executor` | `safety_test.go` | Safety matrix (all risk/certainty/whitelist combinations), `always_confirm` override, whitelist prefix matching including edge cases (partial prefix matches, leading whitespace, empty input) |
+| `internal/llm` | `parse_test.go` | JSON response parsing: plain JSON, markdown-fenced JSON (with and without language tag), whitespace handling, config-type responses, multi-command responses, invalid JSON, empty input |
+| `internal/llm` | `client_test.go` | Client creation (missing API key, unknown provider), HTTP integration via httptest (successful chat, API errors, empty choices), debug output capture |
+| `internal/llm` | `prompt_test.go` | System prompt contains environment info (OS, shell, version, cwd) and required JSON structure instructions |
+| `internal/config` | `config_test.go` | Default config values, save/load round-trip using temp dir, auto-creation of default config on first load, TOML marshal/unmarshal round-trip |
+| `internal/shell` | `detect_test.go` | OS detection matches runtime, shell/version detection returns non-empty values, `shellBaseName` with Unix and Windows paths, `ShellCommand` args for zsh/bash/powershell/cmd |
+
+The LLM client tests use `net/http/httptest` to run a local HTTP server, so they don't require an API key or network access.
+
 ## Project Structure
 
 ```
@@ -156,16 +192,22 @@ ai-cli/
 │   └── version.go               # `ai version` subcommand
 └── internal/
     ├── config/
-    │   └── config.go            # TOML config load/save/defaults (~/.ai-cli/config.toml)
+    │   ├── config.go            # TOML config load/save/defaults (~/.ai-cli/config.toml)
+    │   └── config_test.go
     ├── llm/
     │   ├── client.go            # LLM HTTP client (OpenAI-compatible), debug logging
+    │   ├── client_test.go
     │   ├── prompt.go            # System prompt template with OS/shell/cwd context
+    │   ├── prompt_test.go
+    │   ├── parse_test.go
     │   └── types.go             # JSON request/response structs
     ├── executor/
     │   ├── executor.go          # Sequential command execution with colored output
-    │   └── safety.go            # Whitelist check + risk/certainty safety matrix
+    │   ├── safety.go            # Whitelist check + risk/certainty safety matrix
+    │   └── safety_test.go
     ├── shell/
-    │   └── detect.go            # OS, shell, version detection
+    │   ├── detect.go            # OS, shell, version detection
+    │   └── detect_test.go
     └── interactive/
         └── repl.go              # Readline REPL with history
 ```

@@ -67,8 +67,11 @@ func detectShellVersion(shell string) string {
 }
 
 func shellBaseName(shell string) string {
-	parts := strings.Split(shell, "/")
-	name := parts[len(parts)-1]
+	// Handle both Unix (/) and Windows (\) path separators
+	name := shell
+	if i := strings.LastIndexAny(name, `/\`); i >= 0 {
+		name = name[i+1:]
+	}
 	name = strings.TrimSuffix(name, ".exe")
 	return name
 }
