@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -17,7 +18,29 @@ type Client interface {
 	Chat(systemPrompt, userMessage string) (*Response, error)
 }
 
-func NewClient(cfg *config.Config, debug bool) (Client, error) {
+// DebugWriter returns an io.Writer based on the debug mode string.
+// "screen" -> stderr, "file" -> ~/.ai-cli/llm.log (append), anything else -> nil.
+func DebugWriter(mode string) (io.Writer, func(), error) {
+	switch mode {
+	case "screen":
+		return os.Stderr, func() {}, nil
+	case "file":
+		dir, err := config.ConfigDir()
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot determine config dir for log: %w", err)
+		}
+		logPath := filepath.Join(dir, "llm.log")
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return nil, nil, fmt.Errorf("cannot open log file %s: %w", logPath, err)
+		}
+		return f, func() { f.Close() }, nil
+	default:
+		return nil, func() {}, nil
+	}
+}
+
+func NewClient(cfg *config.Config, debugOut io.Writer) (Client, error) {
 	var baseURL, apiKey string
 
 	switch cfg.Provider.Default {
@@ -39,7 +62,7 @@ func NewClient(cfg *config.Config, debug bool) (Client, error) {
 		baseURL:    strings.TrimRight(baseURL, "/"),
 		apiKey:     apiKey,
 		model:      cfg.Provider.Model,
-		debug:      debug,
+		debugOut:   debugOut,
 		httpClient: &http.Client{Timeout: 60 * time.Second},
 	}, nil
 }
@@ -48,7 +71,7 @@ type openAIClient struct {
 	baseURL    string
 	apiKey     string
 	model      string
-	debug      bool
+	debugOut   io.Writer
 	httpClient *http.Client
 }
 
@@ -66,9 +89,10 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
-	if c.debug {
+	if c.debugOut != nil {
 		prettyReq, _ := json.MarshalIndent(req, "", "  ")
-		fmt.Fprintf(os.Stderr, "\n--- DEBUG REQUEST ---\nPOST %s/chat/completions\n%s\n--- END REQUEST ---\n\n", c.baseURL, string(prettyReq))
+		ts := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s/chat/completions\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
 	}
 
 	httpReq, err := http.NewRequest("POST", c.baseURL+"/chat/completions", bytes.NewReader(body))
@@ -90,8 +114,9 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
-	if c.debug {
-		fmt.Fprintf(os.Stderr, "\n--- DEBUG RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", resp.StatusCode, string(respBody))
+	if c.debugOut != nil {
+		ts := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, string(respBody))
 	}
 
 	if resp.StatusCode != http.StatusOK {

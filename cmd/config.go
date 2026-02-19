@@ -90,6 +90,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return fmt.Sprintf("%d", cfg.Safety.MinCertainty), nil
 	case "whitelist":
 		return strings.Join(cfg.Safety.WhitelistPrefixes, ", "), nil
+	case "debug":
+		return cfg.Debug, nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
 	}
@@ -120,8 +122,13 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("min_certainty must be a number: %w", err)
 		}
 		cfg.Safety.MinCertainty = n
+	case "debug":
+		if value != "none" && value != "screen" && value != "file" {
+			return fmt.Errorf("debug must be 'none', 'screen', or 'file'")
+		}
+		cfg.Debug = value
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, openai_key, openrouter_key, openai_url, openrouter_url, always_confirm, min_certainty", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, openai_key, openrouter_key, openai_url, openrouter_url, always_confirm, min_certainty, debug", key)
 	}
 	return nil
 }

@@ -14,7 +14,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var debug bool
+var debugFlag string
 
 var rootCmd = &cobra.Command{
 	Use:                "ai [instruction]",
@@ -28,7 +28,7 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.Flags().BoolVar(&debug, "debug", false, "Show LLM request and response for debugging")
+	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen or file (overrides config)")
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -49,11 +49,23 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	// --debug flag overrides config; if not set, use config value
+	debugMode := cfg.Debug
+	if debugFlag != "" {
+		debugMode = debugFlag
+	}
+
+	debugOut, closeDebug, err := llm.DebugWriter(debugMode)
+	if err != nil {
+		return err
+	}
+	defer closeDebug()
+
 	shellInfo := shell.Detect()
 
 	// No args: interactive mode
 	if len(args) == 0 {
-		client, err := llm.NewClient(cfg, debug)
+		client, err := llm.NewClient(cfg, debugOut)
 		if err != nil {
 			return err
 		}
@@ -63,7 +75,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 	// Single-shot mode
 	instruction := strings.Join(args, " ")
 
-	client, err := llm.NewClient(cfg, debug)
+	client, err := llm.NewClient(cfg, debugOut)
 	if err != nil {
 		return err
 	}
