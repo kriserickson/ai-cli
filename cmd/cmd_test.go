@@ -124,7 +124,10 @@ func TestSetConfigValue(t *testing.T) {
 		{"openrouter_url", "https://proxy.example.com", func(c *config.Config) bool { return c.Provider.OpenRouter.BaseURL == "https://proxy.example.com" }},
 		{"always_confirm", "true", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
 		{"always_confirm", "false", func(c *config.Config) bool { return !c.Safety.AlwaysConfirm }},
+		{"always_confirm", "TRUE", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
 		{"min_certainty", "95", func(c *config.Config) bool { return c.Safety.MinCertainty == 95 }},
+		{"min_certainty", "0", func(c *config.Config) bool { return c.Safety.MinCertainty == 0 }},
+		{"min_certainty", "100", func(c *config.Config) bool { return c.Safety.MinCertainty == 100 }},
 		{"debug", "screen", func(c *config.Config) bool { return c.Debug == "screen" }},
 		{"debug", "file", func(c *config.Config) bool { return c.Debug == "file" }},
 		{"debug", "none", func(c *config.Config) bool { return c.Debug == "none" }},
@@ -149,6 +152,9 @@ func TestSetConfigValue_Validation(t *testing.T) {
 		{"provider", "gpt"},         // invalid provider name
 		{"debug", "verbose"},        // invalid debug mode
 		{"min_certainty", "notnum"}, // not a number
+		{"min_certainty", "-1"},     // out of range
+		{"min_certainty", "101"},    // out of range
+		{"always_confirm", "1"},     // invalid bool-like value
 		{"unknown_key", "value"},    // unknown key
 	}
 	for _, tt := range tests {
