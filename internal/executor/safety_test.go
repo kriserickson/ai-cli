@@ -44,8 +44,8 @@ func TestShouldConfirm_SafeExactThreshold(t *testing.T) {
 func TestShouldConfirm_RiskyWhitelistedHighCertainty(t *testing.T) {
 	cfg := defaultSafetyCfg()
 	cmd := llm.Command{Command: "git push origin main", Risk: "risky", Certainty: 90}
-	if ShouldConfirm(cmd, cfg) {
-		t.Error("risky whitelisted command with high certainty should auto-execute")
+	if !ShouldConfirm(cmd, cfg) {
+		t.Error("risky whitelisted command with high certainty should require confirmation")
 	}
 }
 
@@ -54,6 +54,14 @@ func TestShouldConfirm_RiskyWhitelistedLowCertainty(t *testing.T) {
 	cmd := llm.Command{Command: "git push --force", Risk: "risky", Certainty: 60}
 	if !ShouldConfirm(cmd, cfg) {
 		t.Error("risky whitelisted command with low certainty should require confirmation")
+	}
+}
+
+func TestShouldConfirm_RiskyWhitelistedExactThreshold(t *testing.T) {
+	cfg := defaultSafetyCfg()
+	cmd := llm.Command{Command: "git checkout .", Risk: "risky", Certainty: 80}
+	if !ShouldConfirm(cmd, cfg) {
+		t.Error("risky command at min_certainty should require confirmation")
 	}
 }
 

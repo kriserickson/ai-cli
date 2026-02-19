@@ -13,19 +13,17 @@ func ShouldConfirm(cmd llm.Command, cfg *config.Config) bool {
 		return true
 	}
 
-	whitelisted := isWhitelisted(cmd.Command, cfg.Safety.WhitelistPrefixes)
+	// Risky commands always require explicit confirmation.
+	if cmd.Risk == "risky" {
+		return true
+	}
+
 	highCertainty := cmd.Certainty >= cfg.Safety.MinCertainty
 
 	switch {
 	case cmd.Risk == "safe" && highCertainty:
 		return false
 	case cmd.Risk == "safe" && !highCertainty:
-		return true
-	case cmd.Risk == "risky" && whitelisted && highCertainty:
-		return false
-	case cmd.Risk == "risky" && whitelisted && !highCertainty:
-		return true
-	case cmd.Risk == "risky" && !whitelisted:
 		return true
 	default:
 		return true

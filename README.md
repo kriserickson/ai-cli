@@ -97,9 +97,7 @@ Decision matrix:
 |------|-------------|------------------------|--------|
 | safe | any | yes | Auto-execute |
 | safe | any | no | Ask confirmation |
-| risky | yes | yes | Auto-execute |
-| risky | yes | no | Ask confirmation |
-| risky | no | any | Ask confirmation |
+| risky | any | any | Ask confirmation |
 
 When `always_confirm=true`, every command asks first.
 
@@ -150,8 +148,8 @@ ai config set min_certainty 60
 
 Important:
 
-- non-whitelisted risky commands still prompt even with low threshold
-- to allow risky commands to auto-run, command prefix must be whitelisted
+- all risky commands prompt for confirmation, regardless of threshold or whitelist
+- `min_certainty` only affects whether safe commands auto-run
 
 ### Whitelist control
 
