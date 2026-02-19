@@ -2,18 +2,49 @@
 
 A Go command-line tool that translates natural language into shell commands using LLMs (OpenAI and OpenRouter). It detects your OS and shell, generates appropriate commands, assesses risk, and optionally auto-executes safe commands.
 
-## Building
+## Build, Test, and Install (go-task)
 
-Requires Go 1.25+.
+Requires Go 1.25+ and `go-task`.
+
+Install `task` once:
+
+```sh
+go install github.com/go-task/task/v3/cmd/task@latest
+```
+
+Then make sure your Go bin directory is on `PATH`:
+
+- Windows: `%USERPROFILE%\go\bin`
+- macOS / Linux: `$HOME/go/bin`
+
+Common project commands:
+
+```sh
+task             # build + test
+task build       # dist/<os>/ai
+task test
+task test:verbose
+task test:pkg PKG=./internal/llm/...
+task install
+```
+
+`task install` copies the built binary from `dist/<os>/` into an OS-specific PATH directory.
+
+Default install targets:
+
+- Windows: `%USERPROFILE%\go\bin`
+- macOS / Linux: `/usr/local/bin`
+
+Override the install target:
 
 **macOS / Linux:**
 ```sh
-go build -o ai .
+task install INSTALL_DIR="$HOME/.local/bin"
 ```
 
-**Windows:**
-```sh
-go build -o ai.exe .
+**Windows (PowerShell):**
+```powershell
+task install INSTALL_DIR="$env:USERPROFILE\tools\bin"
 ```
 
 ## Quick Start
@@ -21,8 +52,8 @@ go build -o ai.exe .
 The easiest way to get started is `ai doctor` — it checks your configuration and runs the interactive setup wizard if no API key is found:
 
 ```sh
-./ai doctor      # macOS / Linux
-ai.exe doctor    # Windows
+task install
+ai doctor
 ```
 
 Or set everything up manually:
@@ -227,25 +258,15 @@ Execute? [Y/n]
 
 ## Testing
 
-Run all tests:
+Use go-task:
 
 ```sh
-go test ./...
-```
-
-Run with verbose output:
-
-```sh
-go test ./... -v
-```
-
-Run tests for a specific package:
-
-```sh
-go test ./internal/executor/...
-go test ./internal/llm/...
-go test ./internal/config/...
-go test ./internal/shell/...
+task test
+task test:verbose
+task test:pkg PKG=./internal/executor/...
+task test:pkg PKG=./internal/llm/...
+task test:pkg PKG=./internal/config/...
+task test:pkg PKG=./internal/shell/...
 ```
 
 ### Test Coverage

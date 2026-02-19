@@ -1,0 +1,49 @@
+version: "3"
+
+vars:
+  APP_NAME: ai
+  DIST_DIR: dist/{{OS}}
+  BIN_NAME: ai
+  BIN_PATH: "{{.DIST_DIR}}/{{.BIN_NAME}}"
+  INSTALL_DIR: '{{if eq OS "windows"}}{{.USERPROFILE}}\go\bin{{else}}/usr/local/bin{{end}}'
+  INSTALL_PATH: '{{if eq OS "windows"}}{{.INSTALL_DIR}}\ai.exe{{else}}{{.INSTALL_DIR}}/ai{{end}}'
+
+tasks:
+  default:
+    desc: Build and test the project
+    cmds:
+      - task: build
+      - task: test
+
+  build:
+    desc: Build the CLI binary to dist/<os>/
+    cmds:
+      - '{{if eq OS "windows"}}if not exist "{{.DIST_DIR}}" mkdir "{{.DIST_DIR}}"{{else}}mkdir -p "{{.DIST_DIR}}"{{end}}'
+      - go build -o "{{.BIN_PATH}}" .
+      - echo Built "{{.BIN_PATH}}"
+
+  test:
+    desc: Run all Go tests
+    cmds:
+      - go test ./...
+
+  test:verbose:
+    desc: Run all Go tests with verbose output
+    cmds:
+      - go test ./... -v
+
+  test:pkg:
+    desc: Run tests for a specific package (set PKG=./internal/llm/...)
+    vars:
+      PKG: '{{default "./..." .PKG}}'
+    cmds:
+      - go test {{.PKG}}
+
+  install:
+    desc: Copy the built CLI into an OS-specific PATH directory
+    deps:
+      - build
+    cmds:
+      - '{{if eq OS "windows"}}if not exist "{{.INSTALL_DIR}}" mkdir "{{.INSTALL_DIR}}"{{else}}mkdir -p "{{.INSTALL_DIR}}"{{end}}'
+      - '{{if eq OS "windows"}}copy /Y "{{.DIST_DIR}}/ai*" "{{.INSTALL_PATH}}" >nul{{else}}cp "{{.BIN_PATH}}" "{{.INSTALL_PATH}}" && chmod +x "{{.INSTALL_PATH}}"{{end}}'
+      - echo Installed "{{.APP_NAME}}" to "{{.INSTALL_PATH}}"
