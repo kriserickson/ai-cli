@@ -6,7 +6,7 @@ vars:
   BIN_NAME: ai
   BIN_PATH: "{{.DIST_DIR}}/{{.BIN_NAME}}"
   INSTALL_DIR: '{{if eq OS "windows"}}{{.USERPROFILE}}\go\bin{{else}}/usr/local/bin{{end}}'
-  INSTALL_PATH: '{{if eq OS "windows"}}{{.INSTALL_DIR}}\ai.exe{{else}}{{.INSTALL_DIR}}/ai{{end}}'
+  INSTALL_PATH: '{{if eq OS "windows"}}{{.INSTALL_DIR}}\ai.exe{{else}}{{.INSTALL_DIR}}/ai{{end}}' 
 
 tasks:
   default:
@@ -18,9 +18,7 @@ tasks:
   build:
     desc: Build the CLI binary to dist/<os>/
     cmds:
-      - '{{if eq OS "windows"}}if not exist "{{.DIST_DIR}}" mkdir "{{.DIST_DIR}}"{{else}}mkdir -p "{{.DIST_DIR}}"{{end}}'
-      - go build -o "{{.BIN_PATH}}" .
-      - echo Built "{{.BIN_PATH}}"
+      - '{{if eq OS "windows"}}cmd /C "powershell -NoProfile -Command \"if (Test-Path ''{{.BIN_PATH}}'') { $bin=(Get-Item ''{{.BIN_PATH}}'').LastWriteTime; $srcs = Get-ChildItem -Recurse -File | Where-Object { $_.Extension -eq ''.go'' -or $_.Name -eq ''go.mod'' -or $_.Name -eq ''go.sum'' }; if (-not ($srcs | Where-Object { $_.LastWriteTime -gt $bin })) { Write-Output ''Up-to-date: {{.BIN_PATH}}''; exit 0 } }; if (-not (Test-Path ''{{.DIST_DIR}}'')) { New-Item -ItemType Directory -Path ''{{.DIST_DIR}}'' | Out-Null }; & go build -o ''{{.BIN_PATH}}'' . ; Write-Output ''Built {{.BIN_PATH}}''\""{{else}}if [ -f "{{.BIN_PATH}}" ] && ! find . \( -name "*.go" -o -name "go.mod" -o -name "go.sum" \) -newer "{{.BIN_PATH}}" | grep -q . ; then echo "Up-to-date: {{.BIN_PATH}}" ; else mkdir -p "{{.DIST_DIR}}" && go build -o "{{.BIN_PATH}}" . && echo Built "{{.BIN_PATH}}" ; fi{{end}}'
 
   test:
     desc: Run all Go tests
@@ -44,6 +42,8 @@ tasks:
     deps:
       - build
     cmds:
-      - '{{if eq OS "windows"}}if not exist "{{.INSTALL_DIR}}" mkdir "{{.INSTALL_DIR}}"{{else}}mkdir -p "{{.INSTALL_DIR}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1){{end}}'
-      - '{{if eq OS "windows"}}copy /Y "{{.DIST_DIR}}/ai*" "{{.INSTALL_PATH}}" >nul{{else}}cp "{{.BIN_PATH}}" "{{.INSTALL_PATH}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1) && chmod +x "{{.INSTALL_PATH}}"{{end}}'
+      - '{{if eq OS "windows"}}cmd /C "powershell -NoProfile -Command \"if (-not (Test-Path -Path ''{{.INSTALL_DIR}}'')) { New-Item -ItemType Directory -Path ''{{.INSTALL_DIR}}'' | Out-Null }\""{{else}}mkdir -p "{{.INSTALL_DIR}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1){{end}}' 
+      - '{{if eq OS "windows"}}cmd /C "powershell -NoProfile -Command \"if (-not (Test-Path -Path ''{{.DIST_DIR}}\\ai'') -and -not (Test-Path -Path ''{{.DIST_DIR}}\\ai.exe'')) { Write-Error ''No built binary found in {{.DIST_DIR}}''; exit 1 }\""{{else}}[ -f "{{.BIN_PATH}}" ] || (echo "No built binary found in {{.DIST_DIR}} — run: task build" && exit 1){{end}}' 
+      - '{{if eq OS "windows"}}cmd /C "powershell -NoProfile -Command \"Get-ChildItem -Path ''{{.DIST_DIR}}'' -Filter 'ai*' | Select-Object -First 1 | ForEach-Object { Copy-Item -Path $_.FullName -Destination ''{{.INSTALL_PATH}}'' -Force }\""{{else}}cp "{{.BIN_PATH}}" "{{.INSTALL_PATH}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1) && chmod +x "{{.INSTALL_PATH}}"{{end}}' 
       - echo Installed "{{.APP_NAME}}" to "{{.INSTALL_PATH}}"
+      - '{{if eq OS "windows"}}cmd /C "powershell -NoProfile -Command \"if (-not ($env:PATH -split ';' | Where-Object { $_ -eq ''{{.INSTALL_DIR}}'' })) { Write-Output 'WARNING: {{.INSTALL_DIR}} is not in your PATH. Add it or re-run `task install INSTALL_DIR=<dir-in-PATH>`' }; if (-not (Test-Path -Path "$env:USERPROFILE\\bin")) { Write-Output 'Note: $env:USERPROFILE\\bin does not exist; create it if you prefer to install there and re-run: task install INSTALL_DIR=$env:USERPROFILE\\bin' }\""{{else}}if ! echo "$PATH" | tr ":" "\\n" | grep -x "{{.INSTALL_DIR}}" >/dev/null; then echo "WARNING: {{.INSTALL_DIR}} is not in PATH. Add with: export PATH=\"$PATH:{{.INSTALL_DIR}}\""; fi{{end}}'

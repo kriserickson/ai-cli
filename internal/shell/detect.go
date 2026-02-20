@@ -49,12 +49,12 @@ func detectShellVersion(shell string) string {
 	var cmd *exec.Cmd
 
 	switch base {
-	case "bash", "zsh", "fish":
-		cmd = exec.Command(shell, "--version")
-	case "powershell", "pwsh":
-		cmd = exec.Command(shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
-	default:
-		return "unknown"
+		case "bash", "zsh", "fish":
+			cmd = exec.Command(shell, "--version")
+		case "powershell", "pwsh":
+			cmd = exec.Command(shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
+		default:
+			return "unknown"
 	}
 
 	out, err := cmd.Output()

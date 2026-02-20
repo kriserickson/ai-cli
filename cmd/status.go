@@ -35,7 +35,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	}
 	logPath := filepath.Join(configDir, "llm.log")
 
-	fmt.Printf("ai-cli v%s\n", Version)
+	fmt.Printf("ai %s\n", Version)
 
 	if _, err := os.Stat(configPath); err == nil {
 		fmt.Printf("Config:   %s  %s\n", configPath, color.GreenString("✓ exists"))

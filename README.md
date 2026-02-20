@@ -23,7 +23,7 @@ Artifact names:
 
 Download from your release page:
 
-- `https://github.com/kriserickson/ai-cli/releases`
+- [`https://github.com/kriserickson/ai-cli/releases`](https://github.com/kriserickson/ai-cli/releases)
 
 Install on macOS:
 
