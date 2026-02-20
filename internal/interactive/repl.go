@@ -14,7 +14,18 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
-func Run(cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
+// BuiltinCommands holds handlers for built-in REPL commands so the interactive
+// package doesn't need to import the cmd package (which would be circular).
+type BuiltinCommands struct {
+	Status   func() error
+	Doctor   func() error
+	SetModel func() error
+	// ConfigRun handles "config show", "config get <key>", "config set <key> <val>".
+	// args is the slice after "config", e.g. ["show"] or ["get", "model"].
+	ConfigRun func(args []string) error
+}
+
+func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
 	configDir, err := config.ConfigDir()
 	if err != nil {
 		return err
@@ -29,7 +40,7 @@ func Run(cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
 	}
 	defer rl.Close()
 
-	fmt.Println("AI CLI interactive mode. Type 'exit' or 'quit' to leave.")
+	fmt.Printf("AI CLI %s — interactive mode. Type 'help' for commands or 'exit' to quit.\n", version)
 
 	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "")
 
@@ -47,21 +58,69 @@ func Run(cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
 		if input == "" {
 			continue
 		}
-		if input == "exit" || input == "quit" {
+
+		// Built-in commands — handle without hitting the LLM
+		switch {
+		case input == "exit" || input == "quit":
 			fmt.Println("Bye!")
 			return nil
-		}
 
-		resp, err := client.Chat(systemPrompt, input)
-		if err != nil {
-			color.Red("Error: %v", err)
-			continue
-		}
+		case input == "help":
+			printHelp()
 
-		if err := handleResponse(resp, cfg, shellInfo); err != nil {
-			color.Red("Error: %v", err)
+		case input == "version":
+			fmt.Printf("ai %s\n", version)
+
+		case input == "status":
+			if err := cmds.Status(); err != nil {
+				color.Red("Error: %v", err)
+			}
+
+		case input == "doctor":
+			if err := cmds.Doctor(); err != nil {
+				color.Red("Error: %v", err)
+			}
+
+		case input == "set-model":
+			if err := cmds.SetModel(); err != nil {
+				color.Red("Error: %v", err)
+			}
+
+		case input == "config" || strings.HasPrefix(input, "config "):
+			parts := strings.Fields(input)
+			if err := cmds.ConfigRun(parts[1:]); err != nil {
+				color.Red("Error: %v", err)
+			}
+
+		default:
+			// Send to LLM
+			resp, err := client.Chat(systemPrompt, input)
+			if err != nil {
+				color.Red("Error: %v", err)
+				continue
+			}
+			if err := handleResponse(resp, cfg, shellInfo); err != nil {
+				color.Red("Error: %v", err)
+			}
 		}
 	}
+}
+
+func printHelp() {
+	fmt.Println()
+	fmt.Println("Built-in commands:")
+	fmt.Printf("  %-30s %s\n", "help", "Show this help message")
+	fmt.Printf("  %-30s %s\n", "version", "Print the current version")
+	fmt.Printf("  %-30s %s\n", "status", "Show current configuration status")
+	fmt.Printf("  %-30s %s\n", "doctor", "Check and repair configuration")
+	fmt.Printf("  %-30s %s\n", "set-model", "Interactively select a provider and model")
+	fmt.Printf("  %-30s %s\n", "config show", "Show current configuration")
+	fmt.Printf("  %-30s %s\n", "config get <key>", "Get a config value")
+	fmt.Printf("  %-30s %s\n", "config set <key> <value>", "Set a config value")
+	fmt.Printf("  %-30s %s\n", "exit / quit", "Exit interactive mode")
+	fmt.Println()
+	fmt.Println("Any other input is translated into shell commands by the AI.")
+	fmt.Println()
 }
 
 func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info) error {
@@ -74,6 +133,7 @@ func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info
 		return fmt.Errorf("unknown response type: %s", resp.Type)
 	}
 }
+
 
 func applyConfig(resp *llm.Response, cfg *config.Config) error {
 	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)

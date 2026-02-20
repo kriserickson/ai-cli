@@ -10,6 +10,26 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// configKeys is the canonical list of settable/gettable config keys used for shell completion.
+var configKeys = []string{
+	"provider",
+	"model",
+	"openai_key",
+	"openrouter_key",
+	"openai_url",
+	"openrouter_url",
+	"always_confirm",
+	"min_certainty",
+	"debug",
+}
+
+// configKeyValues provides completion values for keys that have a fixed set of valid inputs.
+var configKeyValues = map[string][]string{
+	"provider":       {"openai", "openrouter"},
+	"always_confirm": {"true", "false"},
+	"debug":          {"none", "screen", "file"},
+}
+
 func init() {
 	configCmd := &cobra.Command{
 		Use:   "config",
@@ -37,6 +57,12 @@ func init() {
 			Use:   "get <key>",
 			Short: "Get a config value",
 			Args:  cobra.ExactArgs(1),
+			ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				if len(args) == 0 {
+					return configKeys, cobra.ShellCompDirectiveNoFileComp
+				}
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			},
 			RunE: func(cmd *cobra.Command, args []string) error {
 				cfg, err := config.Load()
 				if err != nil {
@@ -54,6 +80,18 @@ func init() {
 			Use:   "set <key> <value>",
 			Short: "Set a config value",
 			Args:  cobra.ExactArgs(2),
+			ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+				switch len(args) {
+				case 0:
+					return configKeys, cobra.ShellCompDirectiveNoFileComp
+				case 1:
+					if vals, ok := configKeyValues[args[0]]; ok {
+						return vals, cobra.ShellCompDirectiveNoFileComp
+					}
+					return nil, cobra.ShellCompDirectiveNoFileComp
+				}
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			},
 			RunE: func(cmd *cobra.Command, args []string) error {
 				cfg, err := config.Load()
 				if err != nil {

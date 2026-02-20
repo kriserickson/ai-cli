@@ -186,6 +186,86 @@ ai config set provider openai
 ai config set openai_key sk-your-key-here
 ```
 
+## Shell Completion
+
+`ai completion` generates an autocompletion script for your shell so you can tab-complete subcommands and flags.
+
+### zsh
+
+Enable completion in your environment (once, if not already done):
+
+```sh
+echo "autoload -U compinit; compinit" >> ~/.zshrc
+```
+
+Load for the current session:
+
+```sh
+source <(ai completion zsh)
+```
+
+Load permanently (macOS with Homebrew):
+
+```sh
+ai completion zsh > $(brew --prefix)/share/zsh/site-functions/_ai
+```
+
+Load permanently (Linux):
+
+```sh
+ai completion zsh > "${fpath[1]}/_ai"
+```
+
+### bash
+
+Requires the `bash-completion` package (`brew install bash-completion` on macOS, or your distro's package manager on Linux).
+
+Load for the current session:
+
+```sh
+source <(ai completion bash)
+```
+
+Load permanently (macOS):
+
+```sh
+ai completion bash > $(brew --prefix)/etc/bash_completion.d/ai
+```
+
+Load permanently (Linux):
+
+```sh
+ai completion bash > /etc/bash_completion.d/ai
+```
+
+### fish
+
+Load for the current session:
+
+```sh
+ai completion fish | source
+```
+
+Load permanently:
+
+```sh
+ai completion fish > ~/.config/fish/completions/ai.fish
+```
+
+### PowerShell
+
+Load for the current session:
+
+```powershell
+ai completion powershell | Out-String | Invoke-Expression
+```
+
+Load permanently — add the above line to your PowerShell profile (`$PROFILE`).
+
+---
+
+Start a new shell after any permanent installation for changes to take effect.
+
 ## Configuration
 
 Configuration file location:
