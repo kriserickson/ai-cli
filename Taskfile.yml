@@ -5,8 +5,10 @@ vars:
   DIST_DIR: dist/{{OS}}
   BIN_NAME: ai
   BIN_PATH: "{{.DIST_DIR}}/{{.BIN_NAME}}"
-  INSTALL_DIR: '{{if eq OS "windows"}}{{.USERPROFILE}}\go\bin{{else}}/usr/local/bin{{end}}'
-  INSTALL_PATH: '{{if eq OS "windows"}}{{.INSTALL_DIR}}\ai.exe{{else}}{{.INSTALL_DIR}}/ai{{end}}' 
+  INSTALL_DIR_UNIX: /usr/local/bin
+  INSTALL_DIR_WINDOWS: '{{.USERPROFILE}}\go\bin'
+  INSTALL_PATH_UNIX: "{{.INSTALL_DIR_UNIX}}/ai"
+  INSTALL_PATH_WINDOWS: '{{.INSTALL_DIR_WINDOWS}}\ai.exe'
 
 tasks:
   default:
@@ -18,7 +20,49 @@ tasks:
   build:
     desc: Build the CLI binary to dist/<os>/
     cmds:
-      - '{{if eq OS "windows"}}cmd /C "powershell -NoProfile -Command \"if (Test-Path ''{{.BIN_PATH}}'') { $bin=(Get-Item ''{{.BIN_PATH}}'').LastWriteTime; $srcs = Get-ChildItem -Recurse -File | Where-Object { $_.Extension -eq ''.go'' -or $_.Name -eq ''go.mod'' -or $_.Name -eq ''go.sum'' }; if (-not ($srcs | Where-Object { $_.LastWriteTime -gt $bin })) { Write-Output ''Up-to-date: {{.BIN_PATH}}''; exit 0 } }; if (-not (Test-Path ''{{.DIST_DIR}}'')) { New-Item -ItemType Directory -Path ''{{.DIST_DIR}}'' | Out-Null }; $dt = Get-Date -Format ''yyMMddHHmmss''; & go build -ldflags \"-X github.com/kriserickson/ai-cli/cmd.Version=dev-$dt\" -o ''{{.BIN_PATH}}'' . ; Write-Output ''Built {{.BIN_PATH}}''\""{{else}}if [ -f "{{.BIN_PATH}}" ] && ! find . \( -name "*.go" -o -name "go.mod" -o -name "go.sum" \) -newer "{{.BIN_PATH}}" | grep -q . ; then echo "Up-to-date: {{.BIN_PATH}}" ; else mkdir -p "{{.DIST_DIR}}" && go build -ldflags "-X github.com/kriserickson/ai-cli/cmd.Version=dev-$(date +%y%m%d%H%M%S)" -o "{{.BIN_PATH}}" . && echo Built "{{.BIN_PATH}}" ; fi{{end}}'
+      - task: '{{if eq OS "windows"}}build:windows{{else}}build:unix{{end}}'
+
+  build:unix:
+    internal: true
+    cmds:
+      - |
+        if [ -f "{{.BIN_PATH}}" ] \
+          && ! find . \( -name "*.go" -o -name "go.mod" -o -name "go.sum" \) -newer "{{.BIN_PATH}}" | grep -q .; then
+          echo "Up-to-date: {{.BIN_PATH}}"
+          exit 0
+        fi
+
+        mkdir -p "{{.DIST_DIR}}"
+        go build \
+          -ldflags "-X github.com/kriserickson/ai-cli/cmd.Version=dev-$(date +%y%m%d%H%M%S)" \
+          -o "{{.BIN_PATH}}" \
+          .
+        echo "Built {{.BIN_PATH}}"
+
+  build:windows:
+    internal: true
+    cmds:
+      - |
+        powershell -NoProfile -Command "
+          if (Test-Path '{{.BIN_PATH}}') {
+            \$bin = (Get-Item '{{.BIN_PATH}}').LastWriteTime
+            \$srcs = Get-ChildItem -Recurse -File | Where-Object {
+              \$_.Extension -eq '.go' -or \$_.Name -eq 'go.mod' -or \$_.Name -eq 'go.sum'
+            }
+            if (-not (\$srcs | Where-Object { \$_.LastWriteTime -gt \$bin })) {
+              Write-Output 'Up-to-date: {{.BIN_PATH}}'
+              exit 0
+            }
+          }
+
+          if (-not (Test-Path '{{.DIST_DIR}}')) {
+            New-Item -ItemType Directory -Path '{{.DIST_DIR}}' | Out-Null
+          }
+
+          \$dt = Get-Date -Format 'yyMMddHHmmss'
+          go build -ldflags '-X github.com/kriserickson/ai-cli/cmd.Version=dev-'\"\$dt\" -o '{{.BIN_PATH}}' .
+          Write-Output 'Built {{.BIN_PATH}}'
+        "
 
   test:
     desc: Run all Go tests
@@ -39,12 +83,59 @@ tasks:
 
   install:
     desc: Copy the built CLI into an OS-specific PATH directory
-    deps:
-      - build
+    silent: true
     cmds:
-      - '{{if eq OS "windows"}}powershell -NoProfile -Command "if (-not (Test-Path -Path ''{{.INSTALL_DIR}}'')) { New-Item -ItemType Directory -Path ''{{.INSTALL_DIR}}'' | Out-Null }"{{else}}mkdir -p "{{.INSTALL_DIR}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1){{end}}' 
-      - '{{if eq OS "windows"}}powershell -NoProfile -Command "if (-not (Test-Path ''{{.DIST_DIR}}/ai'') -and -not (Test-Path ''{{.DIST_DIR}}/ai.exe'')) { Write-Error ''No built binary found in {{.DIST_DIR}}''; exit 1 }"{{else}}[ -f "{{.BIN_PATH}}" ] || (echo "No built binary found in {{.DIST_DIR}} — run: task build" && exit 1){{end}}' 
-      - '{{if eq OS "windows"}}powershell -NoProfile -Command "if (Test-Path ''{{.DIST_DIR}}/ai.exe'') { Copy-Item -Path ''{{.DIST_DIR}}/ai.exe'' -Destination ''{{.INSTALL_PATH}}'' -Force } else { Copy-Item -Path ''{{.DIST_DIR}}/ai'' -Destination ''{{.INSTALL_PATH}}'' -Force }"{{else}}cp "{{.BIN_PATH}}" "{{.INSTALL_PATH}}" 2>/dev/null || (echo "Permission denied. Try running with sudo: sudo task install" && exit 1) && chmod +x "{{.INSTALL_PATH}}"{{end}}' 
-      - echo Installed "{{.APP_NAME}}" to "{{.INSTALL_PATH}}"
-      - cmd: 'echo "Ensure {{.INSTALL_DIR}} is in your PATH to use the {{.APP_NAME}} command."'
-        ignore_error: true
+      - task: '{{if eq OS "windows"}}install:windows{{else}}install:unix{{end}}'
+
+  install:unix:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        mkdir -p "{{.INSTALL_DIR_UNIX}}" 2>/dev/null || {
+          echo "Permission denied. Try running with sudo: sudo task install"
+          exit 1
+        }
+
+        [ -f "{{.BIN_PATH}}" ] || {
+          echo "No built binary found in {{.DIST_DIR}} - run: task build"
+          exit 1
+        }
+
+        cp "{{.BIN_PATH}}" "{{.INSTALL_PATH_UNIX}}" 2>/dev/null || {
+          echo "Permission denied. Try running with sudo: sudo task install"
+          exit 1
+        }
+
+        chmod +x "{{.INSTALL_PATH_UNIX}}"
+        echo "Installed {{.APP_NAME}} to {{.INSTALL_PATH_UNIX}}"
+
+        case ":$PATH:" in
+          *":{{.INSTALL_DIR_UNIX}}:"*) ;;
+          *) echo "Ensure {{.INSTALL_DIR_UNIX}} is in your PATH to use the {{.APP_NAME}} command." ;;
+        esac
+
+  install:windows:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        powershell -NoProfile -Command "
+          if (-not (Test-Path '{{.INSTALL_DIR_WINDOWS}}')) {
+            New-Item -ItemType Directory -Path '{{.INSTALL_DIR_WINDOWS}}' | Out-Null
+          }
+
+          \$binPath = '{{.DIST_DIR}}/ai.exe'
+          if (-not (Test-Path \$binPath)) {
+            Write-Error 'No built binary found in {{.DIST_DIR}} - run: task build'
+            exit 1
+          }
+
+          Copy-Item -Path \$binPath -Destination '{{.INSTALL_PATH_WINDOWS}}' -Force
+          Write-Output 'Installed {{.APP_NAME}} to {{.INSTALL_PATH_WINDOWS}}'
+
+          \$pathEntries = \$env:Path -split ';'
+          if (-not (\$pathEntries -contains '{{.INSTALL_DIR_WINDOWS}}')) {
+            Write-Output 'Ensure {{.INSTALL_DIR_WINDOWS}} is in your PATH to use the {{.APP_NAME}} command.'
+          }
+        "
