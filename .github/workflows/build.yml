@@ -45,6 +45,9 @@ jobs:
           - goos: darwin
             goarch: arm64 # Apple Silicon Macs
             artifact_ext: tar.gz
+          - goos: windows
+            goarch: amd64
+            artifact_ext: zip            
 
     steps:
       - name: Checkout
