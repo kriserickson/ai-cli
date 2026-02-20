@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	toml "github.com/pelletier/go-toml/v2"
@@ -64,8 +65,10 @@ func TestSaveAndLoad(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat config file: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0600 {
-		t.Errorf("config file mode = %o, want %o", got, 0600)
+	if runtime.GOOS != "windows" {
+		if got := info.Mode().Perm(); got != 0600 {
+			t.Errorf("config file mode = %o, want %o", got, 0600)
+		}
 	}
 
 	loaded, err := Load()
