@@ -11,6 +11,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/interactive"
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/shell"
+	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -71,7 +72,58 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		return interactive.Run(cfg, client, shellInfo)
+		cmds := interactive.BuiltinCommands{
+			Status: func() error {
+				return runStatus(nil, nil)
+			},
+			Doctor: func() error {
+				return runDoctor(nil, nil)
+			},
+			SetModel: func() error {
+				return runSetModel(nil, nil)
+			},
+			ConfigRun: func(args []string) error {
+				if len(args) == 0 {
+					return fmt.Errorf("config requires a subcommand: show, get <key>, set <key> <value>")
+				}
+				cfg, err := config.Load()
+				if err != nil {
+					return err
+				}
+				switch args[0] {
+				case "show":
+					data, err := toml.Marshal(cfg)
+					if err != nil {
+						return err
+					}
+					fmt.Print(string(data))
+				case "get":
+					if len(args) < 2 {
+						return fmt.Errorf("config get requires a key argument")
+					}
+					val, err := getConfigValue(cfg, args[1])
+					if err != nil {
+						return err
+					}
+					fmt.Println(val)
+				case "set":
+					if len(args) < 3 {
+						return fmt.Errorf("config set requires key and value arguments")
+					}
+					if err := setConfigValue(cfg, args[1], args[2]); err != nil {
+						return err
+					}
+					if err := config.Save(cfg); err != nil {
+						return fmt.Errorf("failed to save config: %w", err)
+					}
+					color.Green("Config updated successfully.")
+				default:
+					return fmt.Errorf("unknown config subcommand: %s\nUsage: config show | config get <key> | config set <key> <value>", args[0])
+				}
+				return nil
+			},
+		}
+		return interactive.Run(Version, cmds, cfg, client, shellInfo)
 	}
 
 	// Single-shot mode
