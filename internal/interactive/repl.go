@@ -146,41 +146,8 @@ func applyConfig(resp *llm.Response, cfg *config.Config) error {
 		return nil
 	}
 
-	return applyConfigChange(resp.Action, resp.Key, resp.Value, cfg)
-}
-
-func applyConfigChange(action, key, value string, cfg *config.Config) error {
-	switch action {
-	case "set_model":
-		cfg.Provider.Model = value
-	case "set_provider":
-		cfg.Provider.Default = value
-	case "set_key":
-		switch key {
-		case "openai_key":
-			cfg.Provider.OpenAI.APIKey = value
-		case "openrouter_key":
-			cfg.Provider.OpenRouter.APIKey = value
-		default:
-			return fmt.Errorf("unknown key: %s", key)
-		}
-	case "set_safety":
-		switch key {
-		case "always_confirm":
-			cfg.Safety.AlwaysConfirm = value == "true"
-		case "min_certainty":
-			var n int
-			fmt.Sscanf(value, "%d", &n)
-			cfg.Safety.MinCertainty = n
-		default:
-			return fmt.Errorf("unknown safety key: %s", key)
-		}
-	default:
-		return fmt.Errorf("unknown config action: %s", action)
-	}
-
-	if err := config.Save(cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
+	if err := config.ApplyAction(cfg, resp.Action, resp.Key, resp.Value); err != nil {
+		return err
 	}
 	color.Green("Config updated successfully.")
 	return nil
