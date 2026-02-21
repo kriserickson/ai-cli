@@ -10,9 +10,17 @@ Always review and understand every command before you approve or run it. Treat g
 
 ## Quick Start (Users)
 
-### 1) Install from GitHub Release Artifacts
+### 1) Install
 
-Each release publishes prebuilt artifacts for macOS, Linux, and Windows.
+#### Homebrew (macOS and Linux)
+
+```sh
+brew install kriserickson/tap/ai-cli
+```
+
+#### Download from GitHub Releases
+
+Each release publishes signed and notarized prebuilt binaries for macOS, Linux, and Windows.
 
 Artifact names:
 
@@ -21,18 +29,16 @@ Artifact names:
 - `ai-vX.Y.Z-linux-amd64.tar.gz`
 - `ai-vX.Y.Z-windows-amd64.zip`
 
-Download from your release page:
+Download from the release page:
 
 - [`https://github.com/kriserickson/ai-cli/releases`](https://github.com/kriserickson/ai-cli/releases)
 
 Install on macOS:
 
 ```sh
-# Example for Mac v0.4.0
+# Example for Apple Silicon Mac v0.4.0
 curl -LO https://github.com/kriserickson/ai-cli/releases/download/v0.4.0/ai-v0.4.0-darwin-arm64.tar.gz
 tar -xzf ai-v0.4.0-darwin-arm64.tar.gz
-# Required to run, we aren't signing the builds
-xattr -d com.apple.quarantine ai
 chmod +x ai
 sudo mv ai /usr/local/bin/ai
 ai version
@@ -41,9 +47,9 @@ ai version
 Install on Windows (PowerShell):
 
 ```powershell
-# Example for Windows v0.2.0
+# Example for Windows v0.4.0
 Invoke-WebRequest -Uri "https://github.com/kriserickson/ai-cli/releases/download/v0.4.0/ai-v0.4.0-windows-amd64.zip" -OutFile "ai-v0.4.0-windows-amd64.zip"
-Expand-Archive -Path "ai-v0.2.0-windows-amd64.zip" -DestinationPath ".\\ai"
+Expand-Archive -Path "ai-v0.4.0-windows-amd64.zip" -DestinationPath ".\\ai"
 Move-Item ".\\ai\\ai.exe" "$env:USERPROFILE\\go\\bin\\ai.exe" -Force
 ai.exe version
 ```

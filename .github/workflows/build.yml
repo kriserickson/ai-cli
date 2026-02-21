@@ -25,33 +25,23 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Vet
+        run: go vet ./...
+
       - name: Run tests
         run: go test ./...
 
+  # Non-release builds: verify cross-compilation works
   build:
-    name: Build ${{ matrix.goos }}
+    name: Build (snapshot)
     runs-on: ubuntu-latest
     needs: test
-    # Update your matrix in build.yml
-    strategy:
-      matrix:
-        include:
-          - goos: linux
-            goarch: amd64
-            artifact_ext: tar.gz
-          - goos: darwin
-            goarch: amd64 # Intel Macs
-            artifact_ext: tar.gz
-          - goos: darwin
-            goarch: arm64 # Apple Silicon Macs
-            artifact_ext: tar.gz
-          - goos: windows
-            goarch: amd64
-            artifact_ext: zip            
-
+    if: "!startsWith(github.ref, 'refs/tags/v')"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Go
         uses: actions/setup-go@v5
@@ -59,67 +49,83 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Resolve version
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
-          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
-
-      - name: Build binary
-        env:
-          GOOS: ${{ matrix.goos }}
-          GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
-        run: |
-          mkdir -p dist
-          BIN_NAME=ai
-          if [ "${GOOS}" = "windows" ]; then
-            BIN_NAME=ai.exe
-          fi
-          go build -trimpath -ldflags="-s -w -X github.com/kriserickson/ai-cli/cmd.Version=${VERSION}" -o "dist/${BIN_NAME}" .
-
-      - name: Package artifact (unix)
-        if: matrix.goos != 'windows'
-        run: |
-          ARTIFACT="ai-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.artifact_ext }}"
-          tar -C dist -czf "${ARTIFACT}" .
-          echo "ARTIFACT=${ARTIFACT}" >> "${GITHUB_ENV}"
-
-      - name: Package artifact (windows)
-        if: matrix.goos == 'windows'
-        run: |
-          ARTIFACT="ai-${VERSION}-${{ matrix.goos }}-${{ matrix.goarch }}.${{ matrix.artifact_ext }}"
-          cd dist
-          zip -q "../${ARTIFACT}" ai.exe
-          echo "ARTIFACT=${ARTIFACT}" >> "${GITHUB_ENV}"
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: GoReleaser build (snapshot)
+        uses: goreleaser/goreleaser-action@v6
         with:
-          name: ${{ env.ARTIFACT }}
-          path: ${{ env.ARTIFACT }}
-          if-no-files-found: error
+          version: "~> v2"
+          args: build --snapshot --clean
 
+  # Tag pushes: sign, notarize, release, publish Homebrew formula
   release:
     name: Release
-    runs-on: ubuntu-latest
-    needs: build
+    runs-on: macos-latest
+    needs: test
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
-          pattern: ai-*
-          path: release-artifacts
-          merge-multiple: true
+          fetch-depth: 0
 
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
+      - name: Setup Go
+        uses: actions/setup-go@v5
         with:
-          tag_name: ${{ github.ref_name }}
-          files: release-artifacts/*
+          go-version-file: go.mod
+          cache: true
+
+      - name: Import Apple certificate
+        if: env.CERTIFICATE_BASE64 != ''
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          CERT_FILE="$(mktemp /tmp/cert.XXXXXX).p12"
+          KEYCHAIN_FILE="$(mktemp /tmp/keychain.XXXXXX).keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
+
+          echo "${CERTIFICATE_BASE64}" | base64 --decode > "${CERT_FILE}"
+
+          security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_FILE}"
+          security set-keychain-settings -lut 21600 "${KEYCHAIN_FILE}"
+          security unlock-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_FILE}"
+          security import "${CERT_FILE}" \
+            -P "${CERTIFICATE_PASSWORD}" \
+            -A -t cert -f pkcs12 \
+            -k "${KEYCHAIN_FILE}"
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -k "${KEYCHAIN_PASSWORD}" \
+            "${KEYCHAIN_FILE}"
+          security list-keychains -d user -s \
+            "${KEYCHAIN_FILE}" \
+            $(security list-keychains -d user | tr -d '"')
+
+          echo "KEYCHAIN_FILE=${KEYCHAIN_FILE}" >> "${GITHUB_ENV}"
+          rm -f "${CERT_FILE}"
+
+      - name: GoReleaser release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+
+      - name: Notarize darwin binaries
+        if: env.APPLE_ID != ''
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: sh scripts/notarize-darwin.sh
+
+      - name: Clean up keychain
+        if: always()
+        run: |
+          if [ -n "${KEYCHAIN_FILE:-}" ] && [ -f "${KEYCHAIN_FILE}" ]; then
+            security delete-keychain "${KEYCHAIN_FILE}" 2>/dev/null || true
+          fi
