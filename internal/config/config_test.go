@@ -27,8 +27,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Debug != "none" {
 		t.Errorf("debug = %q, want %q", cfg.Debug, "none")
 	}
-	if len(cfg.Safety.WhitelistPrefixes) == 0 {
-		t.Error("whitelist should not be empty by default")
+	if len(cfg.Safety.AllowlistPrefixes) == 0 {
+		t.Error("allowlist should not be empty by default")
 	}
 	if cfg.Provider.OpenAI.BaseURL != "https://api.openai.com/v1" {
 		t.Errorf("openai base_url = %q", cfg.Provider.OpenAI.BaseURL)

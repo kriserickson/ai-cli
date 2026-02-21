@@ -28,7 +28,8 @@ type ProviderDetail struct {
 type SafetyConfig struct {
 	AlwaysConfirm     bool     `toml:"always_confirm"`
 	MinCertainty      int      `toml:"min_certainty"`
-	WhitelistPrefixes []string `toml:"whitelist_prefixes"`
+	AllowlistPrefixes []string `toml:"allowlist_prefixes"`
+	WhitelistPrefixes []string `toml:"whitelist_prefixes,omitempty"` // Deprecated: use allowlist_prefixes
 }
 
 func DefaultConfig() *Config {
@@ -46,7 +47,7 @@ func DefaultConfig() *Config {
 		Safety: SafetyConfig{
 			AlwaysConfirm:     false,
 			MinCertainty:      80,
-			WhitelistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
+			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
 		},
 		Debug: "none",
 	}
@@ -90,6 +91,15 @@ func Load() (*Config, error) {
 	if err := toml.Unmarshal(data, cfg); err != nil {
 		return nil, err
 	}
+
+	// Migrate whitelist to allowlist if needed
+	if len(cfg.Safety.WhitelistPrefixes) > 0 {
+		cfg.Safety.AllowlistPrefixes = cfg.Safety.WhitelistPrefixes
+		cfg.Safety.WhitelistPrefixes = nil
+		// Save the migrated config
+		_ = Save(cfg)
+	}
+
 	return cfg, nil
 }
 

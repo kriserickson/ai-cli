@@ -30,7 +30,7 @@ func ShouldConfirm(cmd llm.Command, cfg *config.Config) bool {
 	}
 }
 
-func isWhitelisted(command string, prefixes []string) bool {
+func isAllowlisted(command string, prefixes []string) bool {
 	cmd := strings.TrimSpace(command)
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(cmd, prefix+" ") || cmd == prefix {

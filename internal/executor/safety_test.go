@@ -12,7 +12,7 @@ func defaultSafetyCfg() *config.Config {
 		Safety: config.SafetyConfig{
 			AlwaysConfirm:     false,
 			MinCertainty:      80,
-			WhitelistPrefixes: []string{"git", "ls", "cat", "echo", "grep", "find"},
+			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "grep", "find"},
 		},
 	}
 }
@@ -41,23 +41,23 @@ func TestShouldConfirm_SafeExactThreshold(t *testing.T) {
 	}
 }
 
-func TestShouldConfirm_RiskyWhitelistedHighCertainty(t *testing.T) {
+func TestShouldConfirm_RiskyAllowlistedHighCertainty(t *testing.T) {
 	cfg := defaultSafetyCfg()
 	cmd := llm.Command{Command: "git push origin main", Risk: "risky", Certainty: 90}
 	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky whitelisted command with high certainty should require confirmation")
+		t.Error("risky Allowlisted command with high certainty should require confirmation")
 	}
 }
 
-func TestShouldConfirm_RiskyWhitelistedLowCertainty(t *testing.T) {
+func TestShouldConfirm_RiskyAllowlistedLowCertainty(t *testing.T) {
 	cfg := defaultSafetyCfg()
 	cmd := llm.Command{Command: "git push --force", Risk: "risky", Certainty: 60}
 	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky whitelisted command with low certainty should require confirmation")
+		t.Error("risky Allowlisted command with low certainty should require confirmation")
 	}
 }
 
-func TestShouldConfirm_RiskyWhitelistedExactThreshold(t *testing.T) {
+func TestShouldConfirm_RiskyAllowlistedExactThreshold(t *testing.T) {
 	cfg := defaultSafetyCfg()
 	cmd := llm.Command{Command: "git checkout .", Risk: "risky", Certainty: 80}
 	if !ShouldConfirm(cmd, cfg) {
@@ -65,11 +65,11 @@ func TestShouldConfirm_RiskyWhitelistedExactThreshold(t *testing.T) {
 	}
 }
 
-func TestShouldConfirm_RiskyNotWhitelisted(t *testing.T) {
+func TestShouldConfirm_RiskyNotAllowlisted(t *testing.T) {
 	cfg := defaultSafetyCfg()
 	cmd := llm.Command{Command: "rm -rf /tmp/stuff", Risk: "risky", Certainty: 99}
 	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky non-whitelisted command should always require confirmation")
+		t.Error("risky non-Allowlisted command should always require confirmation")
 	}
 }
 
@@ -82,7 +82,7 @@ func TestShouldConfirm_AlwaysConfirm(t *testing.T) {
 	}
 }
 
-func TestIsWhitelisted(t *testing.T) {
+func TestIsAllowlisted(t *testing.T) {
 	prefixes := []string{"git", "ls", "cat", "echo"}
 
 	tests := []struct {
@@ -103,9 +103,9 @@ func TestIsWhitelisted(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := isWhitelisted(tt.command, prefixes)
+		got := isAllowlisted(tt.command, prefixes)
 		if got != tt.want {
-			t.Errorf("isWhitelisted(%q) = %v, want %v", tt.command, got, tt.want)
+			t.Errorf("isAllowlisted(%q) = %v, want %v", tt.command, got, tt.want)
 		}
 	}
 }

@@ -3,10 +3,10 @@ version: "3"
 vars:
   APP_NAME: ai
   DIST_DIR: dist/{{OS}}
-  BIN_NAME: ai
+  BIN_NAME: '{{if eq OS "windows"}}ai.exe{{else}}ai{{end}}'
   BIN_PATH: "{{.DIST_DIR}}/{{.BIN_NAME}}"
   INSTALL_DIR_UNIX: /usr/local/bin
-  INSTALL_DIR_WINDOWS: '{{.USERPROFILE}}\go\bin'
+  INSTALL_DIR_WINDOWS: '{{.USERPROFILE}}\bin'
   INSTALL_PATH_UNIX: "{{.INSTALL_DIR_UNIX}}/ai"
   INSTALL_PATH_WINDOWS: '{{.INSTALL_DIR_WINDOWS}}\ai.exe'
 
@@ -60,7 +60,7 @@ tasks:
           }
 
           \$dt = Get-Date -Format 'yyMMddHHmmss'
-          go build -ldflags '-X github.com/kriserickson/ai-cli/cmd.Version=dev-'\"\$dt\" -o '{{.BIN_PATH}}' .
+          go build -ldflags \"-X github.com/kriserickson/ai-cli/cmd.Version=dev-\$dt\" -o '{{.BIN_PATH}}' .
           Write-Output 'Built {{.BIN_PATH}}'
         "
 
@@ -82,8 +82,9 @@ tasks:
       - go test {{.PKG}}
 
   install:
-    desc: Copy the built CLI into an OS-specific PATH directory
+    desc: Build (if needed) and copy the CLI into an OS-specific PATH directory
     silent: true
+    deps: [build]
     cmds:
       - task: '{{if eq OS "windows"}}install:windows{{else}}install:unix{{end}}'
 
