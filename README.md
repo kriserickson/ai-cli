@@ -96,7 +96,7 @@ Every generated command has:
 
 Decision matrix:
 
-| Risk | Whitelisted | Certainty >= threshold | Action |
+| Risk | Allowlisted | Certainty >= threshold | Action |
 |------|-------------|------------------------|--------|
 | safe | any | yes | Auto-execute |
 | safe | any | no | Ask confirmation |
@@ -104,7 +104,7 @@ Decision matrix:
 
 When `always_confirm=true`, every command asks first.
 
-Default whitelist prefixes:
+Default allowlist prefixes:
 
 - `git`
 - `ls`
@@ -151,20 +151,20 @@ ai config set min_certainty 60
 
 Important:
 
-- all risky commands prompt for confirmation, regardless of threshold or whitelist
+- all risky commands prompt for confirmation, regardless of threshold or allowlist
 - `min_certainty` only affects whether safe commands auto-run
 
-### Whitelist control
+### Allowlist control
 
-Current CLI supports reading whitelist via config output, but not setting it directly with `ai config set`.
+Current CLI supports reading allowlist via config output, but not setting it directly with `ai config set`.
 
-To customize whitelist prefixes, edit `~/.ai-cli/config.toml`:
+To customize allowlist prefixes, edit `~/.ai-cli/config.toml`:
 
 ```toml
 [safety]
 always_confirm = false
 min_certainty = 80
-whitelist_prefixes = ["git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"]
+allowlist_prefixes = ["git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"]
 ```
 
 After editing, run:
@@ -288,7 +288,7 @@ Available `ai config get/set` keys:
 
 Notes:
 
-- `whitelist_prefixes` exists in config but is currently edited directly in `config.toml`
+- `allowlist_prefixes` exists in config but is currently edited directly in `config.toml`
 - `ai config get openai_key` and `ai config get openrouter_key` return masked values
 
 ## Debugging
@@ -428,7 +428,7 @@ ai-cli/
     │   └── types.go             # JSON request/response structs
     ├── executor/
     │   ├── executor.go          # Sequential command execution with colored output
-    │   ├── safety.go            # Whitelist check + risk/certainty safety matrix
+    │   ├── safety.go            # allowlist check + risk/certainty safety matrix
     │   └── safety_test.go
     ├── shell/
     │   ├── detect.go            # OS, shell, version detection

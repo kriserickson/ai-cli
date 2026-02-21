@@ -126,8 +126,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return fmt.Sprintf("%v", cfg.Safety.AlwaysConfirm), nil
 	case "min_certainty":
 		return fmt.Sprintf("%d", cfg.Safety.MinCertainty), nil
-	case "whitelist":
-		return strings.Join(cfg.Safety.WhitelistPrefixes, ", "), nil
+	case "allowlist":
+		return strings.Join(cfg.Safety.AllowlistPrefixes, ", "), nil
 	case "debug":
 		return cfg.Debug, nil
 	default:

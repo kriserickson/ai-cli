@@ -111,7 +111,7 @@ func TestLoad_CreatesDefaultOnMissing(t *testing.T) {
 func TestTOMLRoundTrip(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Provider.OpenAI.APIKey = "test-key"
-	cfg.Safety.WhitelistPrefixes = []string{"git", "ls"}
+	cfg.Safety.AllowlistPrefixes = []string{"git", "ls"}
 
 	data, err := toml.Marshal(cfg)
 	if err != nil {
@@ -126,7 +126,7 @@ func TestTOMLRoundTrip(t *testing.T) {
 	if loaded.Provider.OpenAI.APIKey != "test-key" {
 		t.Errorf("api_key = %q, want %q", loaded.Provider.OpenAI.APIKey, "test-key")
 	}
-	if len(loaded.Safety.WhitelistPrefixes) != 2 {
-		t.Errorf("whitelist len = %d, want 2", len(loaded.Safety.WhitelistPrefixes))
+	if len(loaded.Safety.AllowlistPrefixes) != 2 {
+		t.Errorf("allowlist len = %d, want 2", len(loaded.Safety.AllowlistPrefixes))
 	}
 }

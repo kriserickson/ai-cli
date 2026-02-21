@@ -85,7 +85,7 @@ func TestGetConfigValue(t *testing.T) {
 		{"openrouter_url", "https://openrouter.ai/api/v1"},
 		{"always_confirm", "false"},
 		{"min_certainty", "80"},
-		{"whitelist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
+		{"allowlist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
 		{"debug", "none"},
 	}
 	for _, tt := range tests {
