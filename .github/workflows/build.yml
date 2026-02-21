@@ -76,13 +76,13 @@ jobs:
           cache: true
 
       - name: Import Apple certificate
-        if: env.CERTIFICATE_BASE64 != ''
+        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
-          CERT_FILE="$(mktemp /tmp/cert.XXXXXX).p12"
-          KEYCHAIN_FILE="$(mktemp /tmp/keychain.XXXXXX).keychain-db"
+          CERT_FILE="$(mktemp /tmp/cert.XXXXXX.p12)"
+          KEYCHAIN_FILE="$(mktemp /tmp/keychain.XXXXXX.keychain-db)"
           KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
           echo "${CERTIFICATE_BASE64}" | base64 --decode > "${CERT_FILE}"
@@ -116,7 +116,7 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       - name: Notarize darwin binaries
-        if: env.APPLE_ID != ''
+        if: ${{ secrets.APPLE_ID != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}

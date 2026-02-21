@@ -20,7 +20,7 @@ brew install kriserickson/tap/ai-cli
 
 #### Download from GitHub Releases
 
-Each release publishes signed and notarized prebuilt binaries for macOS, Linux, and Windows.
+Each release publishes prebuilt binaries for macOS (signed and notarized), Linux, and Windows.
 
 Artifact names:
 
