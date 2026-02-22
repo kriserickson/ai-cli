@@ -23,7 +23,7 @@ CERT_FILE="/tmp/cert-${RAND}.p12"
 KEYCHAIN_FILE="/tmp/keychain-${RAND}.keychain-db"
 KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
-echo "${CERTIFICATE_BASE64}" | openssl base64 -d -out "${CERT_FILE}"
+echo "${CERTIFICATE_BASE64}" | openssl base64 -d -A -out "${CERT_FILE}"
 
 echo "Creating temporary keychain..."
 security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_FILE}"
