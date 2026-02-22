@@ -78,8 +78,9 @@ alias ai='noglob ai'
 **bash** (`~/.bashrc`):
 
 ```sh
-# Only needed if you have failglob or nullglob enabled
-alias ai='noglob ai'
+# Only needed if you have failglob or nullglob enabled;
+# noglob is zsh-only, so bash needs a wrapper function instead.
+ai() { set -f; command ai "$@"; set +f; }
 ```
 
 Then reload your shell:

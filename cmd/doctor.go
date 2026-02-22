@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -47,6 +47,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	allPassed := true
+	warnings := 0
 
 	// Check 1: Config file — always ✓ (config.Load auto-creates)
 	printCheck("Config file", true, configPath)
@@ -74,13 +75,19 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// Check 3: Model is set — always ✓ (default exists)
 	printCheck("Model", true, cfg.Provider.Model)
 
-	// Check 4: noglob alias for zsh users
+	// Check 4: noglob alias recommendation for zsh users
 	if runtime.GOOS != "windows" {
-		checkNoglobAlias(&allPassed)
+		if !checkNoglobAlias() {
+			warnings++
+		}
 	}
 
 	if allPassed {
-		fmt.Println("All checks passed!")
+		if warnings > 0 {
+			fmt.Printf("All checks passed! (%d recommendation(s) above)\n", warnings)
+		} else {
+			fmt.Println("All checks passed!")
+		}
 	}
 	return nil
 }
@@ -88,40 +95,70 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 // checkNoglobAlias warns zsh users if they don't have a noglob alias for ai.
 // Without it, special characters like ? * # in natural language queries cause
 // shell glob expansion errors (e.g. "zsh: no matches found: cpu?").
-func checkNoglobAlias(allPassed *bool) {
+//
+// Returns true if the alias is present or the check is not applicable,
+// false if a recommendation was printed.
+func checkNoglobAlias() bool {
 	shellEnv := os.Getenv("SHELL")
 	if shellEnv == "" {
-		return
+		return true
 	}
 
 	base := filepath.Base(shellEnv)
 	if base != "zsh" {
-		return
+		return true
 	}
 
-	// Check if the user's interactive zsh has a noglob alias for ai.
-	// We launch zsh as an interactive login shell so it sources .zshrc/.zprofile.
-	out, err := exec.Command(shellEnv, "-i", "-c", "alias ai 2>/dev/null").Output()
+	// Look for a noglob alias in ~/.zshrc rather than spawning an
+	// interactive shell (which is slow and may have side effects from
+	// plugins like oh-my-zsh).
+	home, err := os.UserHomeDir()
 	if err != nil {
-		// If the command fails, we can't determine the alias state; show a hint.
-		*allPassed = false
-		printWarning("noglob alias", "Could not detect shell aliases. For zsh, add to ~/.zshrc: alias ai='noglob ai'")
-		return
+		printWarning("noglob alias", "Could not determine home directory. For zsh, add to ~/.zshrc: alias ai='noglob ai'")
+		return false
 	}
 
-	aliasOutput := strings.TrimSpace(string(out))
+	zshrcPath := filepath.Join(home, ".zshrc")
+	content, err := os.ReadFile(zshrcPath)
+	if err != nil {
+		// No .zshrc or unreadable — warn but don't fail.
+		printWarning("noglob alias", "Could not read ~/.zshrc. For zsh, add: alias ai='noglob ai'")
+		return false
+	}
 
-	// zsh alias output looks like: ai='noglob ai' or ai=noglob ai
-	if strings.Contains(aliasOutput, "noglob") {
+	if hasNoglobAlias(string(content)) {
 		printCheck("noglob alias", true, "ai is aliased with noglob (special characters like ? will work)")
-		return
+		return true
 	}
 
-	*allPassed = false
 	printWarning("noglob alias",
-		"zsh detected but 'ai' is not aliased with noglob. "+
-			"Characters like ? * # in queries will cause glob errors.\n"+
+		"zsh detected but 'ai' is not aliased with noglob in ~/.zshrc. "+
+			"Characters like ? * # in queries may cause glob errors.\n"+
 			"    Add this to your ~/.zshrc:\n"+
 			"      alias ai='noglob ai'\n"+
 			"    Then run: source ~/.zshrc")
+	return false
+}
+
+// noglobAliasPattern matches alias declarations like:
+//
+//	alias ai='noglob ai'
+//	alias ai="noglob ai"
+//	alias ai=noglob\ ai
+var noglobAliasPattern = regexp.MustCompile(`(?m)^\s*alias\s+ai\s*=\s*['"]?noglob\s`)
+
+// hasNoglobAlias checks whether the given shell config content contains a
+// noglob alias for ai. It ignores commented-out lines.
+func hasNoglobAlias(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		// Skip comments
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if noglobAliasPattern.MatchString(line) {
+			return true
+		}
+	}
+	return false
 }
