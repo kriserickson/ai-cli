@@ -1,13 +1,15 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/kriserickson/ai-cli/internal/config"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
+
+	"github.com/kriserickson/ai-cli/internal/config"
 )
 
 // configKeys is the canonical list of settable/gettable config keys used for shell completion.
@@ -25,7 +27,7 @@ var configKeys = []string{
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	"provider":       {"openai", "openrouter"},
+	"provider":       {config.ProviderOpenAI, config.ProviderOpenRouter},
 	"always_confirm": {"true", "false"},
 	"debug":          {"none", "screen", "file"},
 }
@@ -40,7 +42,7 @@ func init() {
 		&cobra.Command{
 			Use:   "show",
 			Short: "Show current configuration",
-			RunE: func(cmd *cobra.Command, args []string) error {
+			RunE: func(_ *cobra.Command, _ []string) error {
 				cfg, err := config.Load()
 				if err != nil {
 					return err
@@ -57,13 +59,13 @@ func init() {
 			Use:   "get <key>",
 			Short: "Get a config value",
 			Args:  cobra.ExactArgs(1),
-			ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 				if len(args) == 0 {
 					return configKeys, cobra.ShellCompDirectiveNoFileComp
 				}
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			},
-			RunE: func(cmd *cobra.Command, args []string) error {
+			RunE: func(_ *cobra.Command, args []string) error {
 				cfg, err := config.Load()
 				if err != nil {
 					return err
@@ -80,7 +82,7 @@ func init() {
 			Use:   "set <key> <value>",
 			Short: "Set a config value",
 			Args:  cobra.ExactArgs(2),
-			ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			ValidArgsFunction: func(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 				switch len(args) {
 				case 0:
 					return configKeys, cobra.ShellCompDirectiveNoFileComp
@@ -92,7 +94,7 @@ func init() {
 				}
 				return nil, cobra.ShellCompDirectiveNoFileComp
 			},
-			RunE: func(cmd *cobra.Command, args []string) error {
+			RunE: func(_ *cobra.Command, args []string) error {
 				cfg, err := config.Load()
 				if err != nil {
 					return err
@@ -123,9 +125,9 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 	case "openrouter_url":
 		return cfg.Provider.OpenRouter.BaseURL, nil
 	case "always_confirm":
-		return fmt.Sprintf("%v", cfg.Safety.AlwaysConfirm), nil
+		return strconv.FormatBool(cfg.Safety.AlwaysConfirm), nil
 	case "min_certainty":
-		return fmt.Sprintf("%d", cfg.Safety.MinCertainty), nil
+		return strconv.Itoa(cfg.Safety.MinCertainty), nil
 	case "allowlist":
 		return strings.Join(cfg.Safety.AllowlistPrefixes, ", "), nil
 	case "debug":
@@ -138,8 +140,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 func setConfigValue(cfg *config.Config, key, value string) error {
 	switch key {
 	case "provider", "default":
-		if value != "openai" && value != "openrouter" {
-			return fmt.Errorf("provider must be 'openai' or 'openrouter'")
+		if value != config.ProviderOpenAI && value != config.ProviderOpenRouter {
+			return errors.New("provider must be 'openai' or 'openrouter'")
 		}
 		cfg.Provider.Default = value
 	case "model":
@@ -164,12 +166,12 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("min_certainty must be a number: %w", err)
 		}
 		if n < 0 || n > 100 {
-			return fmt.Errorf("min_certainty must be between 0 and 100")
+			return errors.New("min_certainty must be between 0 and 100")
 		}
 		cfg.Safety.MinCertainty = n
 	case "debug":
 		if value != "none" && value != "screen" && value != "file" {
-			return fmt.Errorf("debug must be 'none', 'screen', or 'file'")
+			return errors.New("debug must be 'none', 'screen', or 'file'")
 		}
 		cfg.Debug = value
 	default:

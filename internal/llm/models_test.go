@@ -20,7 +20,9 @@ func TestFetchOpenRouterModels_Success(t *testing.T) {
 		if r.URL.Path != "/models" {
 			t.Errorf("path = %s, want /models", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(data)
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -43,7 +45,7 @@ func TestFetchOpenRouterModels_Success(t *testing.T) {
 }
 
 func TestFetchOpenRouterModels_HTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("internal error"))
 	}))
@@ -74,7 +76,9 @@ func TestFetchOpenAIModels_Success(t *testing.T) {
 		if r.Header.Get("Authorization") != "Bearer test-key" {
 			t.Errorf("auth = %q, want %q", r.Header.Get("Authorization"), "Bearer test-key")
 		}
-		json.NewEncoder(w).Encode(data)
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -103,7 +107,7 @@ func TestFetchOpenAIModels_Success(t *testing.T) {
 }
 
 func TestFetchOpenAIModels_HTTPError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error": "unauthorized"}`))
 	}))

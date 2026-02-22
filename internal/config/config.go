@@ -7,6 +7,12 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
+// Provider name constants.
+const (
+	ProviderOpenAI     = "openai"
+	ProviderOpenRouter = "openrouter"
+)
+
 type Config struct {
 	Provider ProviderConfig `toml:"provider"`
 	Safety   SafetyConfig   `toml:"safety"`
@@ -35,7 +41,7 @@ type SafetyConfig struct {
 func DefaultConfig() *Config {
 	return &Config{
 		Provider: ProviderConfig{
-			Default: "openrouter",
+			Default: ProviderOpenRouter,
 			Model:   "anthropic/claude-3.5-sonnet",
 			OpenAI: ProviderDetail{
 				BaseURL: "https://api.openai.com/v1",
@@ -109,7 +115,7 @@ func Save(cfg *Config) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 
@@ -118,11 +124,11 @@ func Save(cfg *Config) error {
 		return err
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
+	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return err
 	}
 
-	if err := os.Chmod(path, 0600); err != nil {
+	if err := os.Chmod(path, 0o600); err != nil {
 		return err
 	}
 

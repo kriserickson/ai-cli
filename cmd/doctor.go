@@ -9,8 +9,9 @@ import (
 	"strings"
 
 	"github.com/fatih/color"
-	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/spf13/cobra"
+
+	"github.com/kriserickson/ai-cli/internal/config"
 )
 
 func init() {
@@ -29,11 +30,11 @@ func printCheck(label string, ok bool, detail string) {
 	}
 }
 
-func printWarning(label string, detail string) {
+func printWarning(label, detail string) {
 	fmt.Printf("  %s %s: %s\n", color.YellowString("⚠"), label, detail)
 }
 
-func runDoctor(cmd *cobra.Command, args []string) error {
+func runDoctor(_ *cobra.Command, _ []string) error {
 	fmt.Println("Checking configuration...")
 
 	cfg, err := config.Load()
@@ -55,9 +56,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	// Check 2: API key for current provider
 	var apiKey string
 	switch cfg.Provider.Default {
-	case "openai":
+	case config.ProviderOpenAI:
 		apiKey = cfg.Provider.OpenAI.APIKey
-	case "openrouter":
+	case config.ProviderOpenRouter:
 		apiKey = cfg.Provider.OpenRouter.APIKey
 	}
 

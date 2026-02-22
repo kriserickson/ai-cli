@@ -1,12 +1,14 @@
 package executor
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
 	"github.com/fatih/color"
+
 	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/shell"
@@ -59,7 +61,7 @@ func execute(command string, shellInfo shell.Info) error {
 	shellBin, args := shell.ShellCommand(shellInfo.Shell)
 	args = append(args, command)
 
-	cmd := exec.Command(shellBin, args...)
+	cmd := exec.CommandContext(context.Background(), shellBin, args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin

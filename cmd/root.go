@@ -1,18 +1,20 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
 
 	"github.com/fatih/color"
+	toml "github.com/pelletier/go-toml/v2"
+	"github.com/spf13/cobra"
+
 	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/executor"
 	"github.com/kriserickson/ai-cli/internal/interactive"
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/shell"
-	toml "github.com/pelletier/go-toml/v2"
-	"github.com/spf13/cobra"
 )
 
 var debugFlag string
@@ -46,7 +48,7 @@ func Execute() {
 	}
 }
 
-func runRoot(cmd *cobra.Command, args []string) error {
+func runRoot(_ *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
@@ -84,7 +86,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 			},
 			ConfigRun: func(args []string) error {
 				if len(args) == 0 {
-					return fmt.Errorf("config requires a subcommand: show, get <key>, set <key> <value>")
+					return errors.New("config requires a subcommand: show, get <key>, set <key> <value>")
 				}
 				cfg, err := config.Load()
 				if err != nil {
@@ -99,7 +101,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 					fmt.Print(string(data))
 				case "get":
 					if len(args) < 2 {
-						return fmt.Errorf("config get requires a key argument")
+						return errors.New("config get requires a key argument")
 					}
 					val, err := getConfigValue(cfg, args[1])
 					if err != nil {
@@ -108,7 +110,7 @@ func runRoot(cmd *cobra.Command, args []string) error {
 					fmt.Println(val)
 				case "set":
 					if len(args) < 3 {
-						return fmt.Errorf("config set requires key and value arguments")
+						return errors.New("config set requires key and value arguments")
 					}
 					if err := setConfigValue(cfg, args[1], args[2]); err != nil {
 						return err

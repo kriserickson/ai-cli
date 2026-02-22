@@ -66,8 +66,8 @@ func TestSaveAndLoad(t *testing.T) {
 		t.Fatalf("stat config file: %v", err)
 	}
 	if runtime.GOOS != "windows" {
-		if got := info.Mode().Perm(); got != 0600 {
-			t.Errorf("config file mode = %o, want %o", got, 0600)
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Errorf("config file mode = %o, want %o", got, 0o600)
 		}
 	}
 

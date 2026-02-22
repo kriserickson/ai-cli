@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 )
@@ -16,7 +17,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 	case "set_model":
 		cfg.Provider.Model = value
 	case "set_provider":
-		if value != "openai" && value != "openrouter" {
+		if value != ProviderOpenAI && value != ProviderOpenRouter {
 			return fmt.Errorf("invalid provider: %s", value)
 		}
 		cfg.Provider.Default = value
@@ -43,7 +44,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 				return fmt.Errorf("min_certainty must be a number: %w", err)
 			}
 			if n < 0 || n > 100 {
-				return fmt.Errorf("min_certainty must be between 0 and 100")
+				return errors.New("min_certainty must be between 0 and 100")
 			}
 			cfg.Safety.MinCertainty = n
 		default:

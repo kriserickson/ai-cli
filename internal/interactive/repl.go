@@ -1,6 +1,7 @@
 package interactive
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/chzyer/readline"
 	"github.com/fatih/color"
+
 	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/executor"
 	"github.com/kriserickson/ai-cli/internal/llm"
@@ -47,7 +49,7 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 	for {
 		line, err := rl.Readline()
 		if err != nil {
-			if err == io.EOF || err == readline.ErrInterrupt {
+			if errors.Is(err, io.EOF) || errors.Is(err, readline.ErrInterrupt) {
 				fmt.Println("Bye!")
 				return nil
 			}
@@ -133,7 +135,6 @@ func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info
 		return fmt.Errorf("unknown response type: %s", resp.Type)
 	}
 }
-
 
 func applyConfig(resp *llm.Response, cfg *config.Config) error {
 	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)

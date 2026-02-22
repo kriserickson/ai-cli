@@ -6,8 +6,9 @@ import (
 	"path/filepath"
 
 	"github.com/fatih/color"
-	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/spf13/cobra"
+
+	"github.com/kriserickson/ai-cli/internal/config"
 )
 
 func init() {
@@ -18,7 +19,7 @@ func init() {
 	})
 }
 
-func runStatus(cmd *cobra.Command, args []string) error {
+func runStatus(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -54,9 +55,9 @@ func runStatus(cmd *cobra.Command, args []string) error {
 
 	var apiKey string
 	switch cfg.Provider.Default {
-	case "openai":
+	case config.ProviderOpenAI:
 		apiKey = cfg.Provider.OpenAI.APIKey
-	case "openrouter":
+	case config.ProviderOpenRouter:
 		apiKey = cfg.Provider.OpenRouter.APIKey
 	}
 
