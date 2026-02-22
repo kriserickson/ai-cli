@@ -32,7 +32,11 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 	case "set_safety":
 		switch key {
 		case "always_confirm":
-			cfg.Safety.AlwaysConfirm = value == "true"
+			b, err := ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("always_confirm %w", err)
+			}
+			cfg.Safety.AlwaysConfirm = b
 		case "min_certainty":
 			n, err := strconv.Atoi(value)
 			if err != nil {

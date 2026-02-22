@@ -153,15 +153,11 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 	case "openrouter_url":
 		cfg.Provider.OpenRouter.BaseURL = value
 	case "always_confirm":
-		lower := strings.ToLower(strings.TrimSpace(value))
-		switch lower {
-		case "true":
-			cfg.Safety.AlwaysConfirm = true
-		case "false":
-			cfg.Safety.AlwaysConfirm = false
-		default:
-			return fmt.Errorf("always_confirm must be 'true' or 'false'")
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("always_confirm %w", err)
 		}
+		cfg.Safety.AlwaysConfirm = b
 	case "min_certainty":
 		n, err := strconv.Atoi(value)
 		if err != nil {
