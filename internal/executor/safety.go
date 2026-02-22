@@ -8,26 +8,29 @@ import (
 )
 
 // ShouldConfirm determines whether a command needs user confirmation before execution.
+//
+// Decision matrix:
+//
+//	always_confirm=true        → confirm
+//	risky                      → confirm
+//	safe + allowlisted         → auto-execute
+//	safe + certainty ≥ min     → auto-execute
+//	safe + certainty < min     → confirm
 func ShouldConfirm(cmd llm.Command, cfg *config.Config) bool {
 	if cfg.Safety.AlwaysConfirm {
 		return true
 	}
 
-	// Risky commands always require explicit confirmation.
 	if cmd.Risk == "risky" {
 		return true
 	}
 
-	highCertainty := cmd.Certainty >= cfg.Safety.MinCertainty
-
-	switch {
-	case cmd.Risk == "safe" && highCertainty:
+	// Safe commands that match the allowlist always auto-execute.
+	if isAllowlisted(cmd.Command, cfg.Safety.AllowlistPrefixes) {
 		return false
-	case cmd.Risk == "safe" && !highCertainty:
-		return true
-	default:
-		return true
 	}
+
+	return cmd.Certainty < cfg.Safety.MinCertainty
 }
 
 func isAllowlisted(command string, prefixes []string) bool {

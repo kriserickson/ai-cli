@@ -134,7 +134,10 @@ func runRoot(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("failed to get working directory: %w", err)
+	}
 	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd)
 
 	resp, err := client.Chat(systemPrompt, instruction)
@@ -163,35 +166,8 @@ func handleConfig(resp *llm.Response, cfg *config.Config) error {
 		return nil
 	}
 
-	switch resp.Action {
-	case "set_model":
-		cfg.Provider.Model = resp.Value
-	case "set_provider":
-		cfg.Provider.Default = resp.Value
-	case "set_key":
-		switch resp.Key {
-		case "openai_key":
-			cfg.Provider.OpenAI.APIKey = resp.Value
-		case "openrouter_key":
-			cfg.Provider.OpenRouter.APIKey = resp.Value
-		default:
-			return fmt.Errorf("unknown key: %s", resp.Key)
-		}
-	case "set_safety":
-		switch resp.Key {
-		case "always_confirm":
-			cfg.Safety.AlwaysConfirm = resp.Value == "true"
-		case "min_certainty":
-			var n int
-			fmt.Sscanf(resp.Value, "%d", &n)
-			cfg.Safety.MinCertainty = n
-		}
-	default:
-		return fmt.Errorf("unknown config action: %s", resp.Action)
-	}
-
-	if err := config.Save(cfg); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
+	if err := config.ApplyAction(cfg, resp.Action, resp.Key, resp.Value); err != nil {
+		return err
 	}
 	color.Green("Config updated successfully.")
 	return nil

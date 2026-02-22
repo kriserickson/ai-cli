@@ -17,68 +17,99 @@ func defaultSafetyCfg() *config.Config {
 	}
 }
 
-func TestShouldConfirm_SafeHighCertainty(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "date", Risk: "safe", Certainty: 95}
-	if ShouldConfirm(cmd, cfg) {
-		t.Error("safe command with high certainty should auto-execute")
-	}
-}
+func TestShouldConfirm(t *testing.T) {
+	tests := []struct {
+		name        string
+		command     string
+		risk        string
+		certainty   int
+		cfgOverride func(*config.Config)
+		wantConfirm bool
+	}{
+		// safe, NOT allowlisted — certainty decides
+		{
+			name:        "safe + high certainty → auto-execute",
+			command:     "date",
+			risk:        "safe",
+			certainty:   95,
+			wantConfirm: false,
+		},
+		{
+			name:        "safe + low certainty → confirm",
+			command:     "date",
+			risk:        "safe",
+			certainty:   50,
+			wantConfirm: true,
+		},
+		{
+			name:        "safe + exact threshold → auto-execute (>= not >)",
+			command:     "date",
+			risk:        "safe",
+			certainty:   80,
+			wantConfirm: false,
+		},
 
-func TestShouldConfirm_SafeLowCertainty(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "date", Risk: "safe", Certainty: 50}
-	if !ShouldConfirm(cmd, cfg) {
-		t.Error("safe command with low certainty should require confirmation")
-	}
-}
+		// safe + allowlisted — bypasses certainty check
+		{
+			name:        "safe + allowlisted + low certainty → auto-execute",
+			command:     "ls -la",
+			risk:        "safe",
+			certainty:   50,
+			wantConfirm: false,
+		},
 
-func TestShouldConfirm_SafeExactThreshold(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "date", Risk: "safe", Certainty: 80}
-	if ShouldConfirm(cmd, cfg) {
-		t.Error("safe command at exactly min_certainty should auto-execute")
-	}
-}
+		// risky — always confirm regardless of allowlist or certainty
+		{
+			name:        "risky + allowlisted + high certainty → confirm",
+			command:     "git push origin main",
+			risk:        "risky",
+			certainty:   90,
+			wantConfirm: true,
+		},
+		{
+			name:        "risky + not allowlisted → confirm",
+			command:     "rm -rf /tmp/stuff",
+			risk:        "risky",
+			certainty:   99,
+			wantConfirm: true,
+		},
 
-func TestShouldConfirm_RiskyAllowlistedHighCertainty(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "git push origin main", Risk: "risky", Certainty: 90}
-	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky Allowlisted command with high certainty should require confirmation")
-	}
-}
+		// always_confirm overrides everything
+		{
+			name:      "always_confirm overrides safe + allowlisted + 100%",
+			command:   "ls",
+			risk:      "safe",
+			certainty: 100,
+			cfgOverride: func(c *config.Config) {
+				c.Safety.AlwaysConfirm = true
+			},
+			wantConfirm: true,
+		},
 
-func TestShouldConfirm_RiskyAllowlistedLowCertainty(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "git push --force", Risk: "risky", Certainty: 60}
-	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky Allowlisted command with low certainty should require confirmation")
+		// empty allowlist — falls back to certainty check
+		{
+			name:      "empty allowlist + safe + low certainty → confirm",
+			command:   "ls -la",
+			risk:      "safe",
+			certainty: 50,
+			cfgOverride: func(c *config.Config) {
+				c.Safety.AllowlistPrefixes = []string{}
+			},
+			wantConfirm: true,
+		},
 	}
-}
 
-func TestShouldConfirm_RiskyAllowlistedExactThreshold(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "git checkout .", Risk: "risky", Certainty: 80}
-	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky command at min_certainty should require confirmation")
-	}
-}
-
-func TestShouldConfirm_RiskyNotAllowlisted(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cmd := llm.Command{Command: "rm -rf /tmp/stuff", Risk: "risky", Certainty: 99}
-	if !ShouldConfirm(cmd, cfg) {
-		t.Error("risky non-Allowlisted command should always require confirmation")
-	}
-}
-
-func TestShouldConfirm_AlwaysConfirm(t *testing.T) {
-	cfg := defaultSafetyCfg()
-	cfg.Safety.AlwaysConfirm = true
-	cmd := llm.Command{Command: "ls", Risk: "safe", Certainty: 100}
-	if !ShouldConfirm(cmd, cfg) {
-		t.Error("always_confirm should require confirmation for any command")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := defaultSafetyCfg()
+			if tt.cfgOverride != nil {
+				tt.cfgOverride(cfg)
+			}
+			cmd := llm.Command{Command: tt.command, Risk: tt.risk, Certainty: tt.certainty}
+			if got := ShouldConfirm(cmd, cfg); got != tt.wantConfirm {
+				t.Errorf("ShouldConfirm() = %v, want %v", got, tt.wantConfirm)
+			}
+		})
 	}
 }
 
@@ -96,9 +127,9 @@ func TestIsAllowlisted(t *testing.T) {
 		{"cat /etc/hosts", true},
 		{"echo hello", true},
 		{"rm -rf /", false},
-		{"lsof -i :8080", false},  // "ls" prefix shouldn't match "lsof"
-		{"gitsomething", false},   // "git" prefix shouldn't match "gitsomething"
-		{"  ls -la", true},        // leading whitespace
+		{"lsof -i :8080", false}, // "ls" prefix shouldn't match "lsof"
+		{"gitsomething", false},  // "git" prefix shouldn't match "gitsomething"
+		{"  ls -la", true},       // leading whitespace
 		{"", false},
 	}
 
