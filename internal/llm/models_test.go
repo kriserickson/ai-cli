@@ -20,7 +20,9 @@ func TestFetchOpenRouterModels_Success(t *testing.T) {
 		if r.URL.Path != "/models" {
 			t.Errorf("path = %s, want /models", r.URL.Path)
 		}
-		json.NewEncoder(w).Encode(data) //nolint:errcheck // test helper
+		if err := json.NewEncoder(w).Encode(data); err != nil {
+			t.Fatalf("failed to encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
