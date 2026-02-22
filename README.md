@@ -10,41 +10,40 @@ Always review and understand every command before you approve or run it. Treat g
 
 ## Quick Start (Users)
 
-### 1) Install from GitHub Release Artifacts
+### 1) Install
 
-Each release publishes prebuilt artifacts for macOS, Linux, and Windows.
-
-Artifact names:
-
-- `ai-vX.Y.Z-darwin-arm64.tar.gz`
-- `ai-vX.Y.Z-darwin-amd64.tar.gz`
-- `ai-vX.Y.Z-linux-amd64.tar.gz`
-- `ai-vX.Y.Z-windows-amd64.zip`
-
-Download from your release page:
-
-- [`https://github.com/kriserickson/ai-cli/releases`](https://github.com/kriserickson/ai-cli/releases)
-
-Install on macOS:
+#### Homebrew (macOS and Linux)
 
 ```sh
-# Example for Mac v0.4.0
-curl -LO https://github.com/kriserickson/ai-cli/releases/download/v0.4.0/ai-v0.4.0-darwin-arm64.tar.gz
-tar -xzf ai-v0.4.0-darwin-arm64.tar.gz
-# Required to run, we aren't signing the builds
-xattr -d com.apple.quarantine ai
+brew install kriserickson/tap/ai-cli
+```
+
+#### Go
+
+Requires Go 1.25+.
+
+```sh
+go install github.com/kriserickson/ai-cli@latest
+```
+
+#### Binary releases
+
+Download prebuilt binaries for macOS (signed and notarized), Linux, and Windows from the [latest release](https://github.com/kriserickson/ai-cli/releases/latest).
+
+On macOS or Linux, extract the archive, make it executable, and move it onto your `PATH`:
+
+```sh
+tar -xzf ai-v*-darwin-arm64.tar.gz   # or linux-amd64, darwin-amd64
 chmod +x ai
 sudo mv ai /usr/local/bin/ai
 ai version
 ```
 
-Install on Windows (PowerShell):
+On Windows (PowerShell), extract the zip and move `ai.exe` onto your `PATH`:
 
 ```powershell
-# Example for Windows v0.2.0
-Invoke-WebRequest -Uri "https://github.com/kriserickson/ai-cli/releases/download/v0.4.0/ai-v0.4.0-windows-amd64.zip" -OutFile "ai-v0.4.0-windows-amd64.zip"
-Expand-Archive -Path "ai-v0.2.0-windows-amd64.zip" -DestinationPath ".\\ai"
-Move-Item ".\\ai\\ai.exe" "$env:USERPROFILE\\go\\bin\\ai.exe" -Force
+Expand-Archive -Path ai-v*-windows-amd64.zip -DestinationPath .\ai
+Move-Item .\ai\ai.exe "$env:USERPROFILE\go\bin\ai.exe" -Force
 ai.exe version
 ```
 

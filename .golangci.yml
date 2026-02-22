@@ -1,0 +1,31 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - copyloopvar
+    - dupl
+    - errname
+    - misspell
+    - unconvert
+    - wastedassign
+    - whitespace
+
+  settings:
+    dupl:
+      threshold: 150
+    errcheck:
+      exclude-functions:
+        - fmt.Scanln
+        - fmt.Sscanf
+        - io.Copy
+        - (*encoding/json.Encoder).Encode
+        - (net/http.ResponseWriter).Write
+
+  exclusions:
+    presets:
+      - std-error-handling
+      - common-false-positives

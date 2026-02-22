@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: ai-cli
+
+builds:
+  - binary: ai
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: linux
+        goarch: arm64
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X github.com/kriserickson/ai-cli/cmd.Version={{ .Version }}
+    flags:
+      - -trimpath
+    hooks:
+      post:
+        - cmd: sh scripts/sign-darwin.sh {{ .Os }} {{ .Path }}
+          output: true
+
+archives:
+  - name_template: "ai-v{{ .Version }}-{{ .Os }}-{{ .Arch }}"
+    format: tar.gz
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - none*
+
+checksum:
+  name_template: "checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^ci:"
+      - "^chore:"
+
+release:
+  github:
+    owner: kriserickson
+    name: ai-cli
+  name_template: "v{{ .Version }}"
+
+brews:
+  - repository:
+      owner: kriserickson
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/kriserickson/ai-cli"
+    description: "Translate natural language into shell commands using AI"
+    license: "MIT"
+    install: |
+      bin.install "ai"
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/ai version")
