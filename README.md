@@ -33,7 +33,11 @@ Download prebuilt binaries for macOS (signed and notarized), Linux, and Windows 
 On macOS or Linux, extract the archive, make it executable, and move it onto your `PATH`:
 
 ```sh
-tar -xzf ai-v*-darwin-arm64.tar.gz   # or linux-amd64, darwin-amd64
+VERSION=$(curl -s https://api.github.com/repos/kriserickson/ai-cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+ARCH=$(uname -m | sed 's/x86_64/amd64/')
+curl -LO "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-${OS}-${ARCH}.tar.gz"
+tar -xzf "ai-${VERSION}-${OS}-${ARCH}.tar.gz"
 chmod +x ai
 sudo mv ai /usr/local/bin/ai
 ai version
@@ -42,7 +46,9 @@ ai version
 On Windows (PowerShell), extract the zip and move `ai.exe` onto your `PATH`:
 
 ```powershell
-Expand-Archive -Path ai-v*-windows-amd64.zip -DestinationPath .\ai
+$VERSION = (Invoke-RestMethod "https://api.github.com/repos/kriserickson/ai-cli/releases/latest").tag_name
+Invoke-WebRequest -Uri "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-windows-amd64.zip" -OutFile "ai-${VERSION}-windows-amd64.zip"
+Expand-Archive -Path "ai-${VERSION}-windows-amd64.zip" -DestinationPath .\ai
 Move-Item .\ai\ai.exe "$env:USERPROFILE\go\bin\ai.exe" -Force
 ai.exe version
 ```
