@@ -63,6 +63,34 @@ Typical flow:
 - checks API key presence
 - starts setup wizard if needed
 
+### Recommended: Shell Alias for Special Characters
+
+Characters like `?`, `*`, and `#` have special meaning in most shells. Without protection, a command like `ai what is using all my cpu?` will fail because zsh tries to glob-expand `cpu?` before `ai` ever sees it.
+
+Add a `noglob` alias to your shell config so you can type naturally:
+
+**zsh** (`~/.zshrc`):
+
+```sh
+alias ai='noglob ai'
+```
+
+**bash** (`~/.bashrc`):
+
+```sh
+# Only needed if you have failglob or nullglob enabled;
+# noglob is zsh-only, so bash needs a wrapper function instead.
+ai() { set -f; command ai "$@"; set +f; }
+```
+
+Then reload your shell:
+
+```sh
+source ~/.zshrc   # or source ~/.bashrc
+```
+
+After this, `ai what is using all my cpu?` will work as expected.
+
 ### 3) Run Your First Commands
 
 Single-shot examples:
