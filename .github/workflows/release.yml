@@ -44,7 +44,6 @@ jobs:
           cache: true
 
       - name: Import Apple certificate
-        if: ${{ secrets.APPLE_CERTIFICATE_BASE64 != '' }}
         env:
           CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
@@ -61,7 +60,6 @@ jobs:
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
 
       - name: Notarize darwin binaries
-        if: ${{ secrets.APPLE_ID != '' }}
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
