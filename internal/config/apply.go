@@ -16,6 +16,9 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 	case "set_model":
 		cfg.Provider.Model = value
 	case "set_provider":
+		if value != "openai" && value != "openrouter" {
+			return fmt.Errorf("invalid provider: %s", value)
+		}
 		cfg.Provider.Default = value
 	case "set_key":
 		switch key {
