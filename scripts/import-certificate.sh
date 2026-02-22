@@ -18,8 +18,9 @@ if [ -z "${CERTIFICATE_BASE64:-}" ] || [ -z "${CERTIFICATE_PASSWORD:-}" ]; then
   exit 0
 fi
 
-CERT_FILE="$(mktemp /tmp/cert.XXXXXX.p12)"
-KEYCHAIN_FILE="$(mktemp /tmp/keychain.XXXXXX.keychain-db)"
+RAND="$(openssl rand -hex 8)"
+CERT_FILE="/tmp/cert-${RAND}.p12"
+KEYCHAIN_FILE="/tmp/keychain-${RAND}.keychain-db"
 KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
 echo "${CERTIFICATE_BASE64}" | openssl base64 -d -out "${CERT_FILE}"
