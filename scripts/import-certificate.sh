@@ -22,7 +22,7 @@ CERT_FILE="$(mktemp /tmp/cert.XXXXXX.p12)"
 KEYCHAIN_FILE="$(mktemp /tmp/keychain.XXXXXX.keychain-db)"
 KEYCHAIN_PASSWORD="$(openssl rand -hex 16)"
 
-echo "${CERTIFICATE_BASE64}" | base64 --decode > "${CERT_FILE}"
+echo "${CERTIFICATE_BASE64}" | openssl base64 -d -out "${CERT_FILE}"
 
 echo "Creating temporary keychain..."
 security create-keychain -p "${KEYCHAIN_PASSWORD}" "${KEYCHAIN_FILE}"
@@ -35,7 +35,7 @@ security import "${CERT_FILE}" \
   -A -t cert -f pkcs12 \
   -k "${KEYCHAIN_FILE}"
 security set-key-partition-list \
-  -S apple-tool:,apple: \
+  -S apple-tool:,apple:,codesign: \
   -k "${KEYCHAIN_PASSWORD}" \
   "${KEYCHAIN_FILE}"
 security list-keychains -d user -s \

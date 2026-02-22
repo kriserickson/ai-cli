@@ -19,7 +19,7 @@ fi
 
 FOUND=0
 
-for bin in dist/ai_darwin_*/ai; do
+for bin in dist/ai-cli_darwin_*/ai; do
   [ -f "$bin" ] || continue
   FOUND=1
 
