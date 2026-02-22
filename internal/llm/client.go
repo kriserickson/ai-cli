@@ -2,7 +2,9 @@ package llm
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,7 +32,7 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 			return nil, nil, fmt.Errorf("cannot determine config dir for log: %w", err)
 		}
 		logPath := filepath.Join(dir, "llm.log")
-		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot open log file %s: %w", logPath, err)
 		}
@@ -44,10 +46,10 @@ func NewClient(cfg *config.Config, debugOut io.Writer) (Client, error) {
 	var baseURL, apiKey string
 
 	switch cfg.Provider.Default {
-	case "openai":
+	case config.ProviderOpenAI:
 		baseURL = cfg.Provider.OpenAI.BaseURL
 		apiKey = cfg.Provider.OpenAI.APIKey
-	case "openrouter":
+	case config.ProviderOpenRouter:
 		baseURL = cfg.Provider.OpenRouter.BaseURL
 		apiKey = cfg.Provider.OpenRouter.APIKey
 	default:
@@ -95,7 +97,7 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s/chat/completions\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
 	}
 
-	httpReq, err := http.NewRequest("POST", c.baseURL+"/chat/completions", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(context.Background(), "POST", c.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -133,7 +135,7 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return nil, fmt.Errorf("no response from LLM")
+		return nil, errors.New("no response from LLM")
 	}
 
 	content := chatResp.Choices[0].Message.Content

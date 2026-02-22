@@ -1,11 +1,14 @@
 package shell
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 )
+
+const shellPowershell = "powershell"
 
 type Info struct {
 	OS      string
@@ -39,7 +42,7 @@ func detectUnixShell() string {
 
 func detectWindowsShell() string {
 	if os.Getenv("PSModulePath") != "" {
-		return "powershell"
+		return shellPowershell
 	}
 	return "cmd"
 }
@@ -49,12 +52,12 @@ func detectShellVersion(shell string) string {
 	var cmd *exec.Cmd
 
 	switch base {
-		case "bash", "zsh", "fish":
-			cmd = exec.Command(shell, "--version")
-		case "powershell", "pwsh":
-			cmd = exec.Command(shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
-		default:
-			return "unknown"
+	case "bash", "zsh", "fish":
+		cmd = exec.CommandContext(context.Background(), shell, "--version")
+	case shellPowershell, "pwsh":
+		cmd = exec.CommandContext(context.Background(), shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
+	default:
+		return "unknown"
 	}
 
 	out, err := cmd.Output()
@@ -77,10 +80,10 @@ func shellBaseName(shell string) string {
 }
 
 // ShellCommand returns the command prefix for executing a string in the detected shell.
-func ShellCommand(shell string) (string, []string) {
+func ShellCommand(shell string) (bin string, args []string) {
 	base := shellBaseName(shell)
 	switch base {
-	case "powershell", "pwsh":
+	case shellPowershell, "pwsh":
 		return shell, []string{"-Command"}
 	case "cmd":
 		return shell, []string{"/c"}

@@ -6,26 +6,131 @@ run:
 linters:
   default: standard
   enable:
-    - copyloopvar
-    - dupl
-    - errname
-    - misspell
-    - unconvert
-    - wastedassign
-    - whitespace
+    - copyloopvar # detects places where loop variables are copied (Go 1.22+)
+    - dupl # code clone detection
+    - errname # checks that sentinel errors are prefixed with Err and error types with Error
+    - misspell # finds commonly misspelled English words in comments/strings
+    - unconvert # removes unnecessary type conversions
+    - wastedassign # finds wasted assignment statements
+    - whitespace # detects unnecessary leading/trailing whitespace
+    - errorlint # finds issues with error wrapping, comparison, and type assertions
+    - nilerr # finds code that returns nil even if it checks that the error is not nil
+    - bodyclose # checks whether HTTP response body is closed
+    - noctx # finds HTTP requests sent without context.Context
+    - fatcontext # detects nested contexts in loops
+    - gosec # security-oriented linter
+    - intrange # suggests using range over int (Go 1.22+)
+    - reassign # checks that package variables are not reassigned
+    - makezero # finds slice declarations with non-zero initial length later used with append
+    - gocritic # broad diagnostic/performance/style checker
+    - revive # fast, configurable, extensible linter (modern golint replacement)
+    - unparam # finds unused function parameters
+    - nolintlint # ensures nolint directives are well-formed and necessary
+    - perfsprint # detects fmt.Sprintf that can be replaced with faster alternatives
+    - nakedret # finds naked returns in long functions
+    - goconst # finds repeated strings that could be constants
+    - gocheckcompilerdirectives # validates go compiler directive comments (//go:)
 
   settings:
     dupl:
       threshold: 150
+
     errcheck:
       exclude-functions:
         - fmt.Scanln
         - fmt.Sscanf
         - io.Copy
-        - (*encoding/json.Encoder).Encode
         - (net/http.ResponseWriter).Write
+
+    errorlint:
+      asserts: false
+
+    goconst:
+      min-len: 2
+      min-occurrences: 3
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+        - style
+      disabled-checks:
+        - appendAssign
+        - ifElseChain
+        - hugeParam
+
+    gosec:
+      excludes:
+        - G117 # struct field name matches secret pattern (e.g. APIKey)
+        - G204 # subprocess launched with variable (common in CLI tools)
+        - G304 # file inclusion via variable (common in CLI tools)
+        - G306 # file permissions (often too strict for CLIs)
+        - G704 # SSRF via taint analysis (CLI tools work with user input)
+        - G705 # XSS via taint analysis (not relevant for CLI tools)
+
+    misspell:
+      locale: US
+
+    nakedret:
+      max-func-lines: 30
+
+    nolintlint:
+      allow-unused: false
+      require-specific: true
+      require-explanation: false
+
+    perfsprint:
+      int-conversion: false
+      err-error: false
+      errorf: true
+      sprintf1: false
+      strconcat: false
+
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: error-naming
+        - name: error-return
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: superfluous-else
+        - name: time-naming
+        - name: var-declaration
+        - name: unused-parameter
+        - name: unreachable-code
+
+    staticcheck:
+      checks:
+        - all
+        - -ST1000 # at least one file in a package should have a package comment
+        - -ST1020 # comment on exported function should be of the form ...
+        - -ST1021 # comment on exported type should be of the form ...
+        - -ST1022 # comment on exported var/const should be of the form ...
 
   exclusions:
     presets:
       - std-error-handling
       - common-false-positives
+      - legacy
+    rules:
+      - path: _test\.go$
+        linters:
+          - dupl
+          - gosec
+          - bodyclose
+          - noctx
+          - goconst
+
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/kriserickson/ai-cli

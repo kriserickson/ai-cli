@@ -1,16 +1,18 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/AlecAivazis/survey/v2"
+
 	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
 func selectFromList(prompt string, options []string) (int, error) {
 	if len(options) == 0 {
-		return 0, fmt.Errorf("no options available")
+		return 0, errors.New("no options available")
 	}
 	var idx int
 	err := survey.AskOne(&survey.Select{
@@ -30,9 +32,9 @@ func pickProvider() (string, error) {
 		return "", err
 	}
 	if idx == 0 {
-		return "openai", nil
+		return config.ProviderOpenAI, nil
 	}
-	return "openrouter", nil
+	return config.ProviderOpenRouter, nil
 }
 
 func promptAPIKey(provider string) (string, error) {
@@ -49,9 +51,9 @@ func promptAPIKey(provider string) (string, error) {
 func ensureAPIKey(cfg *config.Config, provider string) error {
 	var existing string
 	switch provider {
-	case "openai":
+	case config.ProviderOpenAI:
 		existing = cfg.Provider.OpenAI.APIKey
-	case "openrouter":
+	case config.ProviderOpenRouter:
 		existing = cfg.Provider.OpenRouter.APIKey
 	}
 	if existing != "" {
@@ -62,9 +64,9 @@ func ensureAPIKey(cfg *config.Config, provider string) error {
 		return err
 	}
 	switch provider {
-	case "openai":
+	case config.ProviderOpenAI:
 		cfg.Provider.OpenAI.APIKey = key
-	case "openrouter":
+	case config.ProviderOpenRouter:
 		cfg.Provider.OpenRouter.APIKey = key
 	}
 	return nil
@@ -72,7 +74,7 @@ func ensureAPIKey(cfg *config.Config, provider string) error {
 
 func pickModel(cfg *config.Config, provider string) (string, error) {
 	switch provider {
-	case "openrouter":
+	case config.ProviderOpenRouter:
 		baseURL := cfg.Provider.OpenRouter.BaseURL
 		apiKey := cfg.Provider.OpenRouter.APIKey
 		fmt.Println("Fetching available models from OpenRouter...")
@@ -82,7 +84,7 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 		}
 		groups := llm.GroupByCompany(models)
 		if len(groups) == 0 {
-			return "", fmt.Errorf("no models available")
+			return "", errors.New("no models available")
 		}
 		companyNames := make([]string, len(groups))
 		for i, g := range groups {
@@ -103,7 +105,7 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 		}
 		return selectedGroup.Models[modelIdx].ID, nil
 
-	case "openai":
+	case config.ProviderOpenAI:
 		baseURL := cfg.Provider.OpenAI.BaseURL
 		apiKey := cfg.Provider.OpenAI.APIKey
 		fmt.Println("Fetching available models from OpenAI...")
@@ -112,7 +114,7 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 			return "", fmt.Errorf("fetch models: %w", err)
 		}
 		if len(models) == 0 {
-			return "", fmt.Errorf("no GPT models available")
+			return "", errors.New("no GPT models available")
 		}
 		modelIDs := make([]string, len(models))
 		for i, m := range models {

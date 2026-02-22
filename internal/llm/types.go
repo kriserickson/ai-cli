@@ -13,7 +13,7 @@ type Message struct {
 
 // Chat API response types
 type ChatResponse struct {
-	Choices []Choice `json:"choices"`
+	Choices []Choice  `json:"choices"`
 	Error   *APIError `json:"error,omitempty"`
 }
 

@@ -60,7 +60,9 @@ func TestChat_Success(t *testing.T) {
 		chatResp := ChatResponse{
 			Choices: []Choice{{Message: Message{Content: string(respContent)}}},
 		}
-		json.NewEncoder(w).Encode(chatResp)
+		if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -87,7 +89,7 @@ func TestChat_Success(t *testing.T) {
 }
 
 func TestChat_APIError(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		w.Write([]byte(`{"error": {"message": "invalid api key"}}`))
 	}))
@@ -113,11 +115,13 @@ func TestChat_APIError(t *testing.T) {
 }
 
 func TestChat_DebugOutput(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		chatResp := ChatResponse{
 			Choices: []Choice{{Message: Message{Content: `{"type":"commands","commands":[{"command":"pwd","description":"d","risk":"safe","certainty":99}]}`}}},
 		}
-		json.NewEncoder(w).Encode(chatResp)
+		if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -150,9 +154,11 @@ func TestChat_DebugOutput(t *testing.T) {
 }
 
 func TestChat_EmptyChoices(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		chatResp := ChatResponse{Choices: []Choice{}}
-		json.NewEncoder(w).Encode(chatResp)
+		if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 

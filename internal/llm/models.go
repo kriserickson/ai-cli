@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -41,7 +42,14 @@ type openAIModelsResponse struct {
 
 func FetchOpenRouterModels(baseURL, apiKey string) ([]ModelInfo, error) {
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Get(strings.TrimRight(baseURL, "/") + "/models")
+	req, err := http.NewRequestWithContext(context.Background(), "GET", strings.TrimRight(baseURL, "/")+"/models", http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create OpenRouter models request: %w", err)
+	}
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("fetch OpenRouter models: %w", err)
 	}
@@ -62,7 +70,7 @@ func FetchOpenRouterModels(baseURL, apiKey string) ([]ModelInfo, error) {
 		company := "Other"
 		if idx := strings.Index(m.ID, "/"); idx >= 0 {
 			prefix := m.ID[:idx]
-			if len(prefix) > 0 {
+			if prefix != "" {
 				company = strings.ToUpper(prefix[:1]) + prefix[1:]
 			}
 		}
@@ -73,7 +81,7 @@ func FetchOpenRouterModels(baseURL, apiKey string) ([]ModelInfo, error) {
 
 func FetchOpenAIModels(baseURL, apiKey string) ([]ModelInfo, error) {
 	client := &http.Client{Timeout: 60 * time.Second}
-	req, err := http.NewRequest("GET", strings.TrimRight(baseURL, "/")+"/models", nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", strings.TrimRight(baseURL, "/")+"/models", http.NoBody)
 	if err != nil {
 		return nil, fmt.Errorf("create OpenAI models request: %w", err)
 	}
