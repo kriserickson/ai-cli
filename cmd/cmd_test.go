@@ -226,6 +226,34 @@ func TestConfigSet_InvalidValue(t *testing.T) {
 	}
 }
 
+// --- hasNoglobAlias ---
+
+func TestHasNoglobAlias(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"single-quoted", "alias ai='noglob ai'", true},
+		{"double-quoted", `alias ai="noglob ai"`, true},
+		{"indented", "  alias ai='noglob ai'", true},
+		{"commented out", "# alias ai='noglob ai'", false},
+		{"no alias", "export PATH=$PATH:/usr/local/bin", false},
+		{"empty", "", false},
+		{"different alias name", "alias gai='noglob ai'", false},
+		{"among other lines", "export FOO=bar\nalias ai='noglob ai'\nexport BAZ=qux", true},
+		{"comment then real alias", "# old\nalias ai='noglob ai'", true},
+		{"only comment version", "# alias ai='noglob ai'\nexport FOO=bar", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasNoglobAlias(tt.content); got != tt.want {
+				t.Errorf("hasNoglobAlias() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 // --- debug flag ---
 
 func TestDebugFlag_NoOptDefVal(t *testing.T) {

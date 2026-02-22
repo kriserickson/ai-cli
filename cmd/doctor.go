@@ -144,8 +144,7 @@ func checkNoglobAlias() bool {
 //
 //	alias ai='noglob ai'
 //	alias ai="noglob ai"
-//	alias ai=noglob\ ai
-var noglobAliasPattern = regexp.MustCompile(`(?m)^\s*alias\s+ai\s*=\s*['"]?noglob\s`)
+var noglobAliasPattern = regexp.MustCompile(`^\s*alias\s+ai\s*=\s*['"]?noglob\s`)
 
 // hasNoglobAlias checks whether the given shell config content contains a
 // noglob alias for ai. It ignores commented-out lines.
