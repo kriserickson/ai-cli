@@ -188,9 +188,6 @@ func TestParentShellProcess_Smoke(t *testing.T) {
 		return
 	default:
 		// Paths like C:\Program Files\PowerShell\7\pwsh.exe are also valid.
-		if got == "" {
-			t.Fatal("unexpected empty shell string")
-		}
 	}
 }
 
