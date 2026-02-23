@@ -11,6 +11,10 @@ import (
 const (
 	ProviderOpenAI     = "openai"
 	ProviderOpenRouter = "openrouter"
+
+	DebugNone   = "none"
+	DebugScreen = "screen"
+	DebugFile   = "file"
 )
 
 type Config struct {
@@ -55,11 +59,11 @@ func DefaultConfig() *Config {
 			MinCertainty:      80,
 			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
 		},
-		Debug: "none",
+		Debug: DebugNone,
 	}
 }
 
-func ConfigDir() (string, error) {
+func Dir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -67,8 +71,8 @@ func ConfigDir() (string, error) {
 	return filepath.Join(home, ".ai-cli"), nil
 }
 
-func ConfigPath() (string, error) {
-	dir, err := ConfigDir()
+func Path() (string, error) {
+	dir, err := Dir()
 	if err != nil {
 		return "", err
 	}
@@ -76,7 +80,7 @@ func ConfigPath() (string, error) {
 }
 
 func Load() (*Config, error) {
-	path, err := ConfigPath()
+	path, err := Path()
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +114,7 @@ func Load() (*Config, error) {
 }
 
 func Save(cfg *Config) error {
-	path, err := ConfigPath()
+	path, err := Path()
 	if err != nil {
 		return err
 	}

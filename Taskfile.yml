@@ -2,6 +2,8 @@ version: "3"
 
 vars:
   APP_NAME: ai
+  GOPATH:
+    sh: go env GOPATH
   DIST_DIR: dist/{{OS}}
   BIN_NAME: '{{if eq OS "windows"}}ai.exe{{else}}ai{{end}}'
   BIN_PATH: "{{.DIST_DIR}}/{{.BIN_NAME}}"
@@ -86,6 +88,32 @@ tasks:
       PKG: '{{default "./..." .PKG}}'
     cmds:
       - go test {{.PKG}}
+
+  lint:
+    desc: Run golangci-lint
+    env:
+      PATH: '{{.GOPATH}}/bin:{{.PATH}}'
+    cmds:
+      - task: install:lint
+      - golangci-lint run
+
+  lint:fix:
+    desc: Run golangci-lint and fix issues
+    env:
+      PATH: '{{.GOPATH}}/bin:{{.PATH}}'
+    cmds:
+      - task: install:lint
+      - golangci-lint run --fix
+
+  install:lint:
+    desc: Install golangci-lint if missing
+    internal: true
+    cmds:
+      - |
+        if ! command -v golangci-lint >/dev/null 2>&1 && [ ! -f "{{.GOPATH}}/bin/golangci-lint" ] && [ ! -f "{{.GOPATH}}/bin/golangci-lint.exe" ]; then
+          echo "Installing golangci-lint v2.10.1..."
+          go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.10.1
+        fi
 
   install:
     desc: Build (if needed) and copy the CLI into an OS-specific PATH directory

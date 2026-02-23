@@ -54,9 +54,9 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		cfg.Provider.Model = "gpt-4o-mini"
 	})
 
-	configDir, err := config.ConfigDir()
+	configDir, err := config.Dir()
 	if err != nil {
-		t.Fatalf("ConfigDir(): %v", err)
+		t.Fatalf("Dir(): %v", err)
 	}
 	logPath := filepath.Join(configDir, "llm.log")
 	if err := os.WriteFile(logPath, []byte("log"), 0o600); err != nil {

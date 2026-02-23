@@ -27,7 +27,7 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 	case "screen":
 		return os.Stderr, func() {}, nil
 	case "file":
-		dir, err := config.ConfigDir()
+		dir, err := config.Dir()
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot determine config dir for log: %w", err)
 		}

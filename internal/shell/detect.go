@@ -8,7 +8,11 @@ import (
 	"strings"
 )
 
-const shellPowershell = "powershell"
+const (
+	shellPowershell = "powershell"
+	shellWindows    = "windows"
+	shellUnknown    = "unknown"
+)
 
 var (
 	detectParentShellProcess  = parentShellProcess
@@ -27,7 +31,7 @@ func Detect() Info {
 	}
 
 	switch runtime.GOOS {
-	case "windows":
+	case shellWindows:
 		info.Shell = detectWindowsShell()
 	default:
 		info.Shell = detectUnixShell()
@@ -80,12 +84,12 @@ func detectShellVersion(shell string) string {
 	case shellPowershell, "pwsh":
 		cmd = exec.CommandContext(context.Background(), shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
 	default:
-		return "unknown"
+		return shellUnknown
 	}
 
 	out, err := cmd.Output()
 	if err != nil {
-		return "unknown"
+		return shellUnknown
 	}
 
 	firstLine := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
@@ -102,8 +106,8 @@ func shellBaseName(shell string) string {
 	return name
 }
 
-// ShellCommand returns the command prefix for executing a string in the detected shell.
-func ShellCommand(shell string) (bin string, args []string) {
+// Command returns the command prefix for executing a string in the detected shell.
+func Command(shell string) (bin string, args []string) {
 	base := shellBaseName(shell)
 	switch base {
 	case shellPowershell, "pwsh":
