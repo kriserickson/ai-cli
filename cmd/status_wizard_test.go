@@ -38,7 +38,7 @@ func TestRunStatus_NoLog_APIKeyMissing(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "API Key:"} {
+	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
@@ -70,7 +70,7 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "API Key:"} {
+	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
