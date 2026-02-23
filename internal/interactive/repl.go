@@ -13,6 +13,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/executor"
 	"github.com/kriserickson/ai-cli/internal/llm"
+	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
@@ -25,6 +26,8 @@ type BuiltinCommands struct {
 	// ConfigRun handles "config show", "config get <key>", "config set <key> <val>".
 	// args is the slice after "config", e.g. ["show"] or ["get", "model"].
 	ConfigRun func(args []string) error
+	// MemoryRun handles "memory list", "memory add <keyword> <content...>", "memory remove <keyword>".
+	MemoryRun func(args []string) error
 }
 
 func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
@@ -94,9 +97,29 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 				color.Red("Error: %v", err)
 			}
 
+		case input == "memory" || strings.HasPrefix(input, "memory "):
+			parts := strings.Fields(input)
+			if err := cmds.MemoryRun(parts[1:]); err != nil {
+				color.Red("Error: %v", err)
+			}
+
 		default:
+			// Inject matching memories into the prompt
+			prompt := systemPrompt
+			entries, memErr := memory.Load()
+			if memErr == nil {
+				matches := memory.FindMatching(input, entries)
+				if len(matches) > 0 {
+					contexts := make([]llm.MemoryContext, len(matches))
+					for i, m := range matches {
+						contexts[i] = llm.MemoryContext{Keyword: m.Keyword, Content: m.Content}
+					}
+					prompt = llm.AppendMemories(prompt, contexts)
+				}
+			}
+
 			// Send to LLM
-			resp, err := client.Chat(systemPrompt, input)
+			resp, err := client.Chat(prompt, input)
 			if err != nil {
 				color.Red("Error: %v", err)
 				continue
@@ -119,6 +142,9 @@ func printHelp() {
 	fmt.Printf("  %-30s %s\n", "config show", "Show current configuration")
 	fmt.Printf("  %-30s %s\n", "config get <key>", "Get a config value")
 	fmt.Printf("  %-30s %s\n", "config set <key> <value>", "Set a config value")
+	fmt.Printf("  %-30s %s\n", "memory list", "List all memories")
+	fmt.Printf("  %-30s %s\n", "memory add <keyword> <content>", "Add a memory")
+	fmt.Printf("  %-30s %s\n", "memory remove <keyword>", "Remove a memory")
 	fmt.Printf("  %-30s %s\n", "exit / quit", "Exit interactive mode")
 	fmt.Println()
 	fmt.Println("Any other input is translated into shell commands by the AI.")

@@ -14,6 +14,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/executor"
 	"github.com/kriserickson/ai-cli/internal/interactive"
 	"github.com/kriserickson/ai-cli/internal/llm"
+	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
@@ -124,6 +125,36 @@ func runRoot(_ *cobra.Command, args []string) error {
 				}
 				return nil
 			},
+			MemoryRun: func(args []string) error {
+				if len(args) == 0 {
+					return listMemories()
+				}
+				switch args[0] {
+				case "list":
+					return listMemories()
+				case "add":
+					if len(args) < 3 {
+						return errors.New("usage: memory add <keyword> <content...>")
+					}
+					keyword := args[1]
+					content := strings.Join(args[2:], " ")
+					if err := memory.Add(keyword, content); err != nil {
+						return err
+					}
+					fmt.Printf("Memory %q added.\n", keyword)
+				case "remove":
+					if len(args) < 2 {
+						return errors.New("usage: memory remove <keyword>")
+					}
+					if err := memory.Remove(args[1]); err != nil {
+						return err
+					}
+					fmt.Printf("Memory %q removed.\n", args[1])
+				default:
+					return fmt.Errorf("unknown memory subcommand: %s\nUsage: memory list | memory add <keyword> <content...> | memory remove <keyword>", args[0])
+				}
+				return nil
+			},
 		}
 		return interactive.Run(Version, cmds, cfg, client, shellInfo)
 	}
@@ -141,6 +172,19 @@ func runRoot(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd)
+
+	// Inject matching memories into the system prompt
+	entries, err := memory.Load()
+	if err == nil {
+		matches := memory.FindMatching(instruction, entries)
+		if len(matches) > 0 {
+			contexts := make([]llm.MemoryContext, len(matches))
+			for i, m := range matches {
+				contexts[i] = llm.MemoryContext{Keyword: m.Keyword, Content: m.Content}
+			}
+			systemPrompt = llm.AppendMemories(systemPrompt, contexts)
+		}
+	}
 
 	resp, err := client.Chat(systemPrompt, instruction)
 	if err != nil {
