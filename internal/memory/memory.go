@@ -90,11 +90,10 @@ func Remove(keyword string) error {
 		return err
 	}
 
-	lower := strings.ToLower(keyword)
 	found := false
 	result := make([]Entry, 0, len(entries))
 	for _, e := range entries {
-		if strings.ToLower(e.Keyword) == lower {
+		if strings.EqualFold(e.Keyword, keyword) {
 			found = true
 			continue
 		}
