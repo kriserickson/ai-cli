@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
 	"github.com/kriserickson/ai-cli/internal/config"
 )
 
@@ -16,7 +17,7 @@ type Entry struct {
 }
 
 func memoryPath() (string, error) {
-	dir, err := config.ConfigDir()
+	dir, err := config.Dir()
 	if err != nil {
 		return "", err
 	}

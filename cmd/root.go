@@ -33,8 +33,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
-	// When --debug is given without a value, default to "screen"
-	rootCmd.Flags().Lookup("debug").NoOptDefVal = "screen"
+	// When --debug is given without a value, default to config.DebugScreen
+	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -205,7 +205,7 @@ func handleConfig(resp *llm.Response, cfg *config.Config) error {
 	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
 	fmt.Print("Apply? [Y/n] ")
 	var input string
-	fmt.Scanln(&input)
+	_, _ = fmt.Scanln(&input)
 	input = strings.TrimSpace(strings.ToLower(input))
 	if input != "" && input != "y" && input != "yes" {
 		fmt.Println("Skipped.")

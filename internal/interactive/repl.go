@@ -23,7 +23,7 @@ type replLineReader interface {
 }
 
 var (
-	replConfigDir         = config.ConfigDir
+	replConfigDir         = config.Dir
 	replNewReadline       = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
 	replBuildSystemPrompt = llm.BuildSystemPrompt
 	replHandleResponse    = handleResponse
@@ -178,7 +178,7 @@ func applyConfig(resp *llm.Response, cfg *config.Config) error {
 	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
 	fmt.Print("Apply? [Y/n] ")
 	var input string
-	fmt.Scanln(&input)
+	_, _ = fmt.Scanln(&input)
 	input = strings.TrimSpace(strings.ToLower(input))
 	if input != "" && input != "y" && input != "yes" {
 		fmt.Println("Skipped.")
