@@ -44,7 +44,7 @@ func TestRunRootSingleShot_CommandsResponse(t *testing.T) {
 }
 
 func TestRunRootSingleShot_UnexpectedResponseType(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"mystery\"}"}}]}`))
 	}))
@@ -63,7 +63,7 @@ func TestRunRootSingleShot_UnexpectedResponseType(t *testing.T) {
 }
 
 func TestRunRootSingleShot_ConfigResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"config\",\"action\":\"set_model\",\"key\":\"\",\"value\":\"gpt-4o\"}"}}]}`))
 	}))

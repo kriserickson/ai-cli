@@ -11,7 +11,7 @@ import (
 const shellPowershell = "powershell"
 
 var (
-	detectParentShellProcess = parentShellProcess
+	detectParentShellProcess  = parentShellProcess
 	detectPreferredPowershell = preferredPowerShell
 )
 

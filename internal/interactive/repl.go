@@ -22,10 +22,10 @@ type replLineReader interface {
 }
 
 var (
-	replConfigDir        = config.ConfigDir
-	replNewReadline      = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
+	replConfigDir         = config.ConfigDir
+	replNewReadline       = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
 	replBuildSystemPrompt = llm.BuildSystemPrompt
-	replHandleResponse   = handleResponse
+	replHandleResponse    = handleResponse
 )
 
 // BuiltinCommands holds handlers for built-in REPL commands so the interactive
