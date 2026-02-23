@@ -10,6 +10,11 @@ import (
 
 const shellPowershell = "powershell"
 
+var (
+	detectParentShellProcess  = parentShellProcess
+	detectPreferredPowershell = preferredPowerShell
+)
+
 type Info struct {
 	OS      string
 	Shell   string
@@ -41,9 +46,27 @@ func detectUnixShell() string {
 }
 
 func detectWindowsShell() string {
-	if os.Getenv("PSModulePath") != "" {
-		return shellPowershell
+	// Git Bash / MSYS2 / Cygwin: check before anything else because
+	// PSModulePath may still be set in their environments.
+	if os.Getenv("MSYSTEM") != "" || os.Getenv("BASH_VERSION") != "" {
+		// Only use SHELL if it looks like a native Windows path; MSYS-style
+		// paths (e.g. /usr/bin/bash) are not valid Windows executables.
+		if shell := os.Getenv("SHELL"); shell != "" && !strings.HasPrefix(shell, "/") {
+			return shell
+		}
+		return "bash"
 	}
+
+	// Walk the process tree to find the actual parent shell.
+	if name := detectParentShellProcess(); name != "" {
+		return name
+	}
+
+	// Fallback: PSModulePath heuristic (set by PowerShell in its child processes).
+	if os.Getenv("PSModulePath") != "" {
+		return detectPreferredPowershell()
+	}
+
 	return "cmd"
 }
 

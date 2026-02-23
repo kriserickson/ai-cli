@@ -118,7 +118,7 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 
 	if c.debugOut != nil {
 		ts := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, string(respBody))
+		fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
 
 	if resp.StatusCode != http.StatusOK {

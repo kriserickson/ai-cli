@@ -41,6 +41,7 @@ tasks:
 
   build:windows:
     internal: true
+    silent: true
     cmds:
       - |
         powershell -NoProfile -Command "
@@ -67,12 +68,17 @@ tasks:
   test:
     desc: Run all Go tests
     cmds:
-      - go test ./...
+      - go test -cover ./...
+
+  test:coverage:
+    desc: Run all Go tests
+    cmds:
+      - go test -coverprofile=coverage.out ./...
 
   test:verbose:
     desc: Run all Go tests with verbose output
     cmds:
-      - go test ./... -v
+      - go test -cover ./... -v
 
   test:pkg:
     desc: Run tests for a specific package (set PKG=./internal/llm/...)
