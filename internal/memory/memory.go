@@ -72,9 +72,8 @@ func Add(keyword, content string) error {
 		return err
 	}
 
-	lower := strings.ToLower(keyword)
 	for _, e := range entries {
-		if strings.ToLower(e.Keyword) == lower {
+		if strings.EqualFold(e.Keyword, keyword) {
 			return fmt.Errorf("memory %q already exists; remove it first to update", keyword)
 		}
 	}
