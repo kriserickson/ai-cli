@@ -49,7 +49,9 @@ func detectWindowsShell() string {
 	// Git Bash / MSYS2 / Cygwin: check before anything else because
 	// PSModulePath may still be set in their environments.
 	if os.Getenv("MSYSTEM") != "" || os.Getenv("BASH_VERSION") != "" {
-		if shell := os.Getenv("SHELL"); shell != "" {
+		// Only use SHELL if it looks like a native Windows path; MSYS-style
+		// paths (e.g. /usr/bin/bash) are not valid Windows executables.
+		if shell := os.Getenv("SHELL"); shell != "" && !strings.HasPrefix(shell, "/") {
 			return shell
 		}
 		return "bash"
