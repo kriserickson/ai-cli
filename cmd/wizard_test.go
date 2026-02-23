@@ -254,11 +254,7 @@ func TestPickModel_SuccessPaths(t *testing.T) {
 		call := 0
 		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
 			ptr := response.(*int)
-			if call == 0 {
-				*ptr = 0 // Anthropic (sorted before Openai)
-			} else {
-				*ptr = 0 // first model in selected group
-			}
+			*ptr = 0 // first selection in each prompt (company then model)
 			call++
 			return nil
 		}
@@ -353,4 +349,3 @@ func TestRunModelWizard(t *testing.T) {
 		}
 	})
 }
-

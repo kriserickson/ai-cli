@@ -207,4 +207,3 @@ func TestParentShellProcess_Smoke(t *testing.T) {
 		// Paths like C:\Program Files\PowerShell\7\pwsh.exe are also valid.
 	}
 }
-

@@ -11,7 +11,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/config"
 )
 
-func saveCmdConfig(t *testing.T, mutate func(*config.Config)) *config.Config {
+func saveCmdConfig(t *testing.T, mutate func(*config.Config)) {
 	t.Helper()
 	tempHome(t)
 
@@ -22,7 +22,6 @@ func saveCmdConfig(t *testing.T, mutate func(*config.Config)) *config.Config {
 	if err := config.Save(cfg); err != nil {
 		t.Fatalf("config.Save: %v", err)
 	}
-	return cfg
 }
 
 func TestRunStatus_NoLog_APIKeyMissing(t *testing.T) {
