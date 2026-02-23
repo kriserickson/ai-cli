@@ -10,12 +10,19 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
+var (
+	wizardAskOne            = survey.AskOne
+	wizardFetchOpenAIModels = llm.FetchOpenAIModels
+	wizardFetchORModels     = llm.FetchOpenRouterModels
+	wizardSaveConfig        = config.Save
+)
+
 func selectFromList(prompt string, options []string) (int, error) {
 	if len(options) == 0 {
 		return 0, errors.New("no options available")
 	}
 	var idx int
-	err := survey.AskOne(&survey.Select{
+	err := wizardAskOne(&survey.Select{
 		Message:  prompt,
 		Options:  options,
 		PageSize: 16,
@@ -39,7 +46,7 @@ func pickProvider() (string, error) {
 
 func promptAPIKey(provider string) (string, error) {
 	var key string
-	err := survey.AskOne(&survey.Password{
+	err := wizardAskOne(&survey.Password{
 		Message: fmt.Sprintf("API key for %s:", provider),
 	}, &key, survey.WithValidator(survey.Required))
 	if err != nil {
@@ -78,7 +85,7 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 		baseURL := cfg.Provider.OpenRouter.BaseURL
 		apiKey := cfg.Provider.OpenRouter.APIKey
 		fmt.Println("Fetching available models from OpenRouter...")
-		models, err := llm.FetchOpenRouterModels(baseURL, apiKey)
+		models, err := wizardFetchORModels(baseURL, apiKey)
 		if err != nil {
 			return "", fmt.Errorf("fetch models: %w", err)
 		}
@@ -109,7 +116,7 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 		baseURL := cfg.Provider.OpenAI.BaseURL
 		apiKey := cfg.Provider.OpenAI.APIKey
 		fmt.Println("Fetching available models from OpenAI...")
-		models, err := llm.FetchOpenAIModels(baseURL, apiKey)
+		models, err := wizardFetchOpenAIModels(baseURL, apiKey)
 		if err != nil {
 			return "", fmt.Errorf("fetch models: %w", err)
 		}
@@ -151,5 +158,5 @@ func RunModelWizard(cfg *config.Config) error {
 	cfg.Provider.Default = provider
 	cfg.Provider.Model = model
 
-	return config.Save(cfg)
+	return wizardSaveConfig(cfg)
 }

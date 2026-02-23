@@ -341,7 +341,7 @@ ai --debug=file list files
 
 For complex requests, AI CLI may return multiple commands. They run sequentially and stop on first failure.
 
-```text
+```sh
 $ ai kill the process on port 8080
 
 [1/2] Find PID on port 8080
