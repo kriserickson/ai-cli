@@ -17,6 +17,18 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
+type replLineReader interface {
+	Readline() (string, error)
+	Close() error
+}
+
+var (
+	replConfigDir         = config.ConfigDir
+	replNewReadline       = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
+	replBuildSystemPrompt = llm.BuildSystemPrompt
+	replHandleResponse    = handleResponse
+)
+
 // BuiltinCommands holds handlers for built-in REPL commands so the interactive
 // package doesn't need to import the cmd package (which would be circular).
 type BuiltinCommands struct {
@@ -31,12 +43,12 @@ type BuiltinCommands struct {
 }
 
 func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
-	configDir, err := config.ConfigDir()
+	configDir, err := replConfigDir()
 	if err != nil {
 		return err
 	}
 
-	rl, err := readline.NewEx(&readline.Config{
+	rl, err := replNewReadline(&readline.Config{
 		Prompt:      color.New(color.FgCyan, color.Bold).Sprint("ai> "),
 		HistoryFile: filepath.Join(configDir, "history"),
 	})
@@ -47,7 +59,7 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 
 	fmt.Printf("AI CLI %s — interactive mode. Type 'help' for commands or 'exit' to quit.\n", version)
 
-	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "")
+	systemPrompt := replBuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "")
 
 	for {
 		line, err := rl.Readline()
@@ -124,7 +136,7 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 				color.Red("Error: %v", err)
 				continue
 			}
-			if err := handleResponse(resp, cfg, shellInfo); err != nil {
+			if err := replHandleResponse(resp, cfg, shellInfo); err != nil {
 				color.Red("Error: %v", err)
 			}
 		}

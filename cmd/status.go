@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kriserickson/ai-cli/internal/config"
+	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
 func init() {
@@ -52,6 +53,9 @@ func runStatus(_ *cobra.Command, _ []string) error {
 
 	fmt.Printf("Provider: %s\n", cfg.Provider.Default)
 	fmt.Printf("Model:    %s\n", cfg.Provider.Model)
+
+	shellInfo := shell.Detect()
+	fmt.Printf("Shell:    %s  (%s)\n", shellInfo.Shell, shellInfo.Version)
 
 	var apiKey string
 	switch cfg.Provider.Default {
