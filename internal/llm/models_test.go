@@ -47,7 +47,7 @@ func TestFetchOpenRouterModels_Success(t *testing.T) {
 func TestFetchOpenRouterModels_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 
@@ -109,7 +109,7 @@ func TestFetchOpenAIModels_Success(t *testing.T) {
 func TestFetchOpenAIModels_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error": "unauthorized"}`))
+		_, _ = w.Write([]byte(`{"error": "unauthorized"}`))
 	}))
 	defer server.Close()
 

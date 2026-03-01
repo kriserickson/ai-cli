@@ -42,7 +42,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	configPath, err := config.ConfigPath()
+	configPath, err := config.Path()
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 
 	if apiKey == "" {
 		allPassed = false
-		printCheck("API key", false, fmt.Sprintf("No API key configured for %s", cfg.Provider.Default))
+		printCheck("API key", false, "No API key configured for "+cfg.Provider.Default)
 		fmt.Println("    Running setup wizard...")
 		if err := RunModelWizard(cfg); err != nil {
 			return err

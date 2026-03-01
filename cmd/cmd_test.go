@@ -34,7 +34,7 @@ func runCmd(t *testing.T, args ...string) (string, error) {
 	os.Stdout = saved
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	r.Close()
 	return buf.String(), execErr
 }

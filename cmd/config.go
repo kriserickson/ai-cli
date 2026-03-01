@@ -29,7 +29,7 @@ var configKeys = []string{
 var configKeyValues = map[string][]string{
 	"provider":       {config.ProviderOpenAI, config.ProviderOpenRouter},
 	"always_confirm": {"true", "false"},
-	"debug":          {"none", "screen", "file"},
+	"debug":          {config.DebugNone, config.DebugScreen, config.DebugFile},
 }
 
 func init() {
@@ -170,8 +170,8 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.Safety.MinCertainty = n
 	case "debug":
-		if value != "none" && value != "screen" && value != "file" {
-			return errors.New("debug must be 'none', 'screen', or 'file'")
+		if value != config.DebugNone && value != config.DebugScreen && value != config.DebugFile {
+			return fmt.Errorf("debug must be '%s', '%s', or '%s'", config.DebugNone, config.DebugScreen, config.DebugFile)
 		}
 		cfg.Debug = value
 	default:

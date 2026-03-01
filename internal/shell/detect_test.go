@@ -67,12 +67,12 @@ func TestShellCommand_Unix(t *testing.T) {
 		{"bash", "bash", []string{"-c"}},
 	}
 	for _, tt := range tests {
-		bin, args := ShellCommand(tt.shell)
+		bin, args := Command(tt.shell)
 		if bin != tt.wantBin {
-			t.Errorf("ShellCommand(%q) bin = %q, want %q", tt.shell, bin, tt.wantBin)
+			t.Errorf("Command(%q) bin = %q, want %q", tt.shell, bin, tt.wantBin)
 		}
 		if len(args) != len(tt.wantArgs) || args[0] != tt.wantArgs[0] {
-			t.Errorf("ShellCommand(%q) args = %v, want %v", tt.shell, args, tt.wantArgs)
+			t.Errorf("Command(%q) args = %v, want %v", tt.shell, args, tt.wantArgs)
 		}
 	}
 }

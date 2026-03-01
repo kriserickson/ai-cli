@@ -15,7 +15,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
-func saveCmdConfig(t *testing.T, mutate func(*config.Config)) *config.Config {
+func saveCmdConfig(t *testing.T, mutate func(*config.Config)) {
 	t.Helper()
 	tempHome(t)
 
@@ -26,7 +26,6 @@ func saveCmdConfig(t *testing.T, mutate func(*config.Config)) *config.Config {
 	if err := config.Save(cfg); err != nil {
 		t.Fatalf("config.Save: %v", err)
 	}
-	return cfg
 }
 
 func TestRunStatus_LoadError(t *testing.T) {
@@ -56,7 +55,7 @@ func TestRunStatus_NoLog_APIKeyMissing(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "API Key:"} {
+	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
@@ -73,9 +72,9 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		cfg.Provider.Model = "gpt-4o-mini"
 	})
 
-	configDir, err := config.ConfigDir()
+	configDir, err := config.Dir()
 	if err != nil {
-		t.Fatalf("ConfigDir(): %v", err)
+		t.Fatalf("Dir(): %v", err)
 	}
 	logPath := filepath.Join(configDir, "llm.log")
 	if err := os.WriteFile(logPath, []byte("log"), 0o600); err != nil {
@@ -88,7 +87,7 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "API Key:"} {
+	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}

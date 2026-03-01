@@ -58,7 +58,7 @@ func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info) error
 }
 
 func execute(command string, shellInfo shell.Info) error {
-	shellBin, args := shell.ShellCommand(shellInfo.Shell)
+	shellBin, args := shell.Command(shellInfo.Shell)
 	args = append(args, command)
 
 	cmd := exec.CommandContext(context.Background(), shellBin, args...)
@@ -72,7 +72,7 @@ func execute(command string, shellInfo shell.Info) error {
 func askConfirmation() bool {
 	fmt.Print("Execute? [Y/n] ")
 	var input string
-	fmt.Scanln(&input)
+	_, _ = fmt.Scanln(&input)
 	input = strings.TrimSpace(strings.ToLower(input))
 	return input == "" || input == "y" || input == "yes"
 }

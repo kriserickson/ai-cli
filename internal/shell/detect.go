@@ -8,10 +8,14 @@ import (
 	"strings"
 )
 
-const shellPowershell = "powershell"
+const (
+	shellPowershell = "powershell"
+	shellWindows    = "windows"
+	shellUnknown    = "unknown"
+)
 
 var (
-	detectParentShellProcess = parentShellProcess
+	detectParentShellProcess  = parentShellProcess
 	detectPreferredPowershell = preferredPowerShell
 )
 
@@ -27,7 +31,7 @@ func Detect() Info {
 	}
 
 	switch runtime.GOOS {
-	case "windows":
+	case shellWindows:
 		info.Shell = detectWindowsShell()
 	default:
 		info.Shell = detectUnixShell()
@@ -49,7 +53,9 @@ func detectWindowsShell() string {
 	// Git Bash / MSYS2 / Cygwin: check before anything else because
 	// PSModulePath may still be set in their environments.
 	if os.Getenv("MSYSTEM") != "" || os.Getenv("BASH_VERSION") != "" {
-		if shell := os.Getenv("SHELL"); shell != "" {
+		// Only use SHELL if it looks like a native Windows path; MSYS-style
+		// paths (e.g. /usr/bin/bash) are not valid Windows executables.
+		if shell := os.Getenv("SHELL"); shell != "" && !strings.HasPrefix(shell, "/") {
 			return shell
 		}
 		return "bash"
@@ -78,12 +84,12 @@ func detectShellVersion(shell string) string {
 	case shellPowershell, "pwsh":
 		cmd = exec.CommandContext(context.Background(), shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
 	default:
-		return "unknown"
+		return shellUnknown
 	}
 
 	out, err := cmd.Output()
 	if err != nil {
-		return "unknown"
+		return shellUnknown
 	}
 
 	firstLine := strings.SplitN(strings.TrimSpace(string(out)), "\n", 2)[0]
@@ -100,8 +106,8 @@ func shellBaseName(shell string) string {
 	return name
 }
 
-// ShellCommand returns the command prefix for executing a string in the detected shell.
-func ShellCommand(shell string) (bin string, args []string) {
+// Command returns the command prefix for executing a string in the detected shell.
+func Command(shell string) (bin string, args []string) {
 	base := shellBaseName(shell)
 	switch base {
 	case shellPowershell, "pwsh":

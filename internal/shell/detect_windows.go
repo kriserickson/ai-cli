@@ -65,7 +65,9 @@ func parentShellProcess() string {
 		case "pwsh.exe":
 			return pwshExePath()
 		case "bash.exe", "git-bash.exe", "sh.exe":
-			if shell := os.Getenv("SHELL"); shell != "" {
+			// Only use SHELL if it looks like a native Windows path; MSYS-style
+			// paths (e.g. /usr/bin/bash) are not valid Windows executables.
+			if shell := os.Getenv("SHELL"); shell != "" && !strings.HasPrefix(shell, "/") {
 				return shell
 			}
 			return "bash"

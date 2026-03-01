@@ -38,7 +38,7 @@ func captureStdout(t *testing.T, fn func()) string {
 	return buf.String()
 }
 
-func writeConfigForDoctor(t *testing.T, mutate func(*config.Config)) *config.Config {
+func writeConfigForDoctor(t *testing.T, mutate func(*config.Config)) {
 	t.Helper()
 	tempHome(t)
 
@@ -49,7 +49,6 @@ func writeConfigForDoctor(t *testing.T, mutate func(*config.Config)) *config.Con
 	if err := config.Save(cfg); err != nil {
 		t.Fatalf("config.Save: %v", err)
 	}
-	return cfg
 }
 
 func TestPrintCheckAndWarning(t *testing.T) {
