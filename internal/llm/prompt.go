@@ -62,7 +62,7 @@ This system uses BSD userland, NOT GNU coreutils. You MUST use BSD-compatible fl
 - tar: macOS ships bsdtar, NOT GNU tar. Do NOT use "--wildcards" or other GNU-specific flags.
 - find: "find -printf" is NOT available (GNU-only). Use "-print0 | xargs -0" or "-exec" instead.
 - awk: macOS ships BSD awk, NOT gawk. Do NOT use gawk features like "--csv" or "BEGINFILE/ENDFILE".
-- To update ai-cli via Homebrew: "brew upgrade kriserickson/tap/ai-cli". The full tap path is required.
+- To update ai-cli via Homebrew: "brew upgrade ai-cli" (or "brew upgrade kriserickson/tap/ai-cli" if needed).
 `
 
 const linuxHints = `
