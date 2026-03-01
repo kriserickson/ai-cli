@@ -23,7 +23,7 @@ var (
 )
 
 // Run executes a list of commands sequentially, prompting for confirmation as needed.
-func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info) error {
+func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info, explain bool) error {
 	for i, cmd := range commands {
 		if len(commands) > 1 {
 			dimColor.Printf("\n[%d/%d] ", i+1, len(commands))
@@ -42,6 +42,10 @@ func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info) error
 			safeColor.Printf("[safe]")
 		}
 		dimColor.Printf(" %d%% certainty\n", cmd.Certainty)
+
+		if explain && cmd.Explanation != "" {
+			dimColor.Printf("  💡 %s\n", cmd.Explanation)
+		}
 
 		if ShouldConfirm(cmd, cfg) {
 			if !askConfirmation() {

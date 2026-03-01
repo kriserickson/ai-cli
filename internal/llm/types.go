@@ -41,4 +41,5 @@ type Command struct {
 	Description string `json:"description"`
 	Risk        string `json:"risk"`
 	Certainty   int    `json:"certainty"`
+	Explanation string `json:"explanation,omitempty"`
 }

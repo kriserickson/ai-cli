@@ -20,7 +20,10 @@ import (
 
 const windows = "windows"
 
-var debugFlag string
+var (
+	debugFlag   string
+	explainFlag bool
+)
 
 // interactiveRun is the entry point for interactive mode, stubbable for testing.
 var interactiveRun = interactive.Run
@@ -40,6 +43,7 @@ func init() {
 	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
 	// When --debug is given without a value, default to config.DebugScreen
 	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
+	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Show detailed explanation of each command")
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -176,7 +180,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
-	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd)
+	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd, explainFlag)
 
 	// Inject matching memories into the system prompt
 	entries, err := memory.Load()
@@ -198,7 +202,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 
 	switch resp.Type {
 	case "commands":
-		return executor.Run(resp.Commands, cfg, shellInfo)
+		return executor.Run(resp.Commands, cfg, shellInfo, explainFlag)
 	case "config":
 		return handleConfig(resp, cfg)
 	default:

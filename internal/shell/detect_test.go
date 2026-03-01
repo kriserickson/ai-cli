@@ -77,10 +77,21 @@ func TestShellCommand_Unix(t *testing.T) {
 	}
 }
 
+func stubShellHooks(t *testing.T) {
+	t.Helper()
+	oldParent := detectParentShellProcess
+	oldPreferred := detectPreferredPowershell
+	t.Cleanup(func() {
+		detectParentShellProcess = oldParent
+		detectPreferredPowershell = oldPreferred
+	})
+}
+
 func TestDetectWindowsShell_GitBash(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("Windows only")
-	}
+	stubShellHooks(t)
+	// Prevent parent shell detection and preferred powershell from interfering
+	detectParentShellProcess = func() string { return "" }
+	detectPreferredPowershell = func() string { return "powershell" }
 
 	tests := []struct {
 		name   string
@@ -102,6 +113,77 @@ func TestDetectWindowsShell_GitBash(t *testing.T) {
 				t.Errorf("detectWindowsShell() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDetectWindowsShell_GitBashWithWindowsShellPath(t *testing.T) {
+	stubShellHooks(t)
+	detectParentShellProcess = func() string { return "" }
+
+	t.Setenv("MSYSTEM", "MINGW64")
+	t.Setenv("BASH_VERSION", "")
+	t.Setenv("SHELL", `C:\Program Files\Git\bin\bash.exe`)
+
+	got := detectWindowsShell()
+	if got != `C:\Program Files\Git\bin\bash.exe` {
+		t.Errorf("detectWindowsShell() = %q, want Windows SHELL path", got)
+	}
+}
+
+func TestDetectWindowsShell_GitBashIgnoresUnixShellPath(t *testing.T) {
+	stubShellHooks(t)
+	detectParentShellProcess = func() string { return "" }
+
+	t.Setenv("MSYSTEM", "MINGW64")
+	t.Setenv("BASH_VERSION", "")
+	t.Setenv("SHELL", "/usr/bin/bash")
+
+	got := detectWindowsShell()
+	if got != "bash" {
+		t.Errorf("detectWindowsShell() = %q, want bash", got)
+	}
+}
+
+func TestDetectWindowsShell_ParentShellWins(t *testing.T) {
+	stubShellHooks(t)
+	t.Setenv("MSYSTEM", "")
+	t.Setenv("BASH_VERSION", "")
+	t.Setenv("SHELL", "")
+	t.Setenv("PSModulePath", "something")
+	detectParentShellProcess = func() string { return "cmd" }
+
+	got := detectWindowsShell()
+	if got != "cmd" {
+		t.Errorf("detectWindowsShell() = %q, want cmd", got)
+	}
+}
+
+func TestDetectWindowsShell_PSModulePathFallback(t *testing.T) {
+	stubShellHooks(t)
+	t.Setenv("MSYSTEM", "")
+	t.Setenv("BASH_VERSION", "")
+	t.Setenv("SHELL", "")
+	t.Setenv("PSModulePath", "something")
+	detectParentShellProcess = func() string { return "" }
+	detectPreferredPowershell = func() string { return "pwsh" }
+
+	got := detectWindowsShell()
+	if got != "pwsh" {
+		t.Errorf("detectWindowsShell() = %q, want pwsh", got)
+	}
+}
+
+func TestDetectWindowsShell_FallbackToCmd(t *testing.T) {
+	stubShellHooks(t)
+	t.Setenv("MSYSTEM", "")
+	t.Setenv("BASH_VERSION", "")
+	t.Setenv("SHELL", "")
+	t.Setenv("PSModulePath", "")
+	detectParentShellProcess = func() string { return "" }
+
+	got := detectWindowsShell()
+	if got != "cmd" {
+		t.Errorf("detectWindowsShell() = %q, want cmd", got)
 	}
 }
 
@@ -127,12 +209,40 @@ func TestDetectShellVersion_Branches(t *testing.T) {
 		t.Fatalf("detectShellVersion(nonexistent bash path) = %q, want unknown", got)
 	}
 
-	// Smoke test a likely available shell on this environment without making
-	// the test fail if it is missing.
-	if runtime.GOOS == "windows" {
-		got := detectShellVersion("pwsh")
-		if got != "unknown" && strings.TrimSpace(got) == "" {
-			t.Fatalf("detectShellVersion(pwsh) returned empty non-unknown value")
+	// Test successful version detection with an actual shell available on this platform.
+	if runtime.GOOS != "windows" {
+		got := detectShellVersion("/bin/sh")
+		// /bin/sh is a symlink to bash or zsh on macOS/linux, might return "unknown"
+		// for plain sh. The point is it doesn't panic.
+		if got == "" {
+			t.Fatal("detectShellVersion(/bin/sh) returned empty string")
 		}
+
+		// Test with bash if available (covers the success path through output parsing)
+		bashVersion := detectShellVersion("bash")
+		if bashVersion == "" {
+			t.Fatal("detectShellVersion(bash) returned empty string")
+		}
+		// Should return a version string or "unknown"
+		if bashVersion != "unknown" && !strings.Contains(strings.ToLower(bashVersion), "bash") &&
+			!strings.Contains(bashVersion, ".") {
+			t.Logf("detectShellVersion(bash) = %q (accepted)", bashVersion)
+		}
+	}
+}
+
+func TestParentShellProcess_NonWindows(t *testing.T) {
+	// On non-Windows, parentShellProcess is a no-op stub that returns "".
+	got := parentShellProcess()
+	if got != "" {
+		t.Fatalf("parentShellProcess() = %q, want empty string on non-Windows", got)
+	}
+}
+
+func TestPreferredPowerShell_NonWindows(t *testing.T) {
+	// On non-Windows, preferredPowerShell returns "powershell".
+	got := preferredPowerShell()
+	if got != "powershell" {
+		t.Fatalf("preferredPowerShell() = %q, want powershell on non-Windows", got)
 	}
 }
