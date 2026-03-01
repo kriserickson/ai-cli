@@ -168,7 +168,8 @@ func execCommandHelp(command string) (string, error) {
 	}
 
 	if runtime.GOOS == windowsOS {
-		cmd := exec.CommandContext(context.Background(), "powershell", "-Command", fmt.Sprintf("Get-Help '%s'", command))
+		cmd := exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Help -Name $env:HELP_COMMAND")
+		cmd.Env = append(os.Environ(), "HELP_COMMAND="+command)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("Get-Help failed: %s", string(out))
