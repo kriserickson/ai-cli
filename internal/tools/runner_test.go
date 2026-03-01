@@ -200,6 +200,22 @@ func TestRunWithTools_DangerousPromptMode_SafeToolNoPrompt(t *testing.T) {
 	}
 }
 
+func TestRunWithTools_UnknownToolCallingMode(t *testing.T) {
+	client := &mockClient{
+		responses: []*llm.Response{
+			{Type: "tool_request", Tool: "disk_usage", ToolArgs: map[string]string{}},
+		},
+	}
+
+	_, err := RunWithTools(client, "system", "test", toolCallingCfg("invalid_mode"), shell.Info{}, 3)
+	if err == nil {
+		t.Fatal("expected error for unknown tool_calling mode")
+	}
+	if !strings.Contains(err.Error(), "unknown tool_calling mode") {
+		t.Errorf("error = %q, want 'unknown tool_calling mode'", err.Error())
+	}
+}
+
 func TestRunWithTools_UnknownTool(t *testing.T) {
 	client := &mockClient{
 		responses: []*llm.Response{
