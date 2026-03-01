@@ -33,6 +33,7 @@ Rules for commands:
 - Never generate commands that could cause irreversible damage without clear user intent
 {{EXPLAIN_INSTRUCTION}}
 {{PLATFORM_HINTS}}
+{{TOOL_INSTRUCTIONS}}
 For requests to change AI CLI configuration (model, provider, API key, safety settings), respond with:
 {
   "type": "config",
@@ -81,6 +82,33 @@ Platform-specific rules (Windows):
 - Do NOT use Unix commands unless running under WSL or Git Bash.
 `
 
+const toolInstructions = `You have access to read-only tools to gather information before generating commands.
+To use a tool, respond with:
+{
+  "type": "tool_request",
+  "tool": "tool_name",
+  "args": {"arg_name": "value"}
+}
+
+Available tools:
+- list_directory: List files in a directory. Args: path (default ".")
+- read_file: Read file contents (max 10KB, safety-checked). Args: path
+- command_help: Get help/man page for a command. Args: command
+- list_memories: List stored AI CLI memories. No args.
+- list_processes: List running processes. No args.
+- system_resources: Show top processes by CPU/memory. No args.
+- network_connections: Show active network connections. No args.
+- ping: Check host connectivity (3 packets). Args: host
+- check_command: Check if a command is installed. Args: command
+- disk_usage: Show disk space usage. No args.
+- environment: Show environment variables (sensitive values masked). No args.
+
+Rules for tools:
+- Use tools ONLY when you need information to generate better commands
+- Maximum 3 tool calls per request
+- After gathering information, respond with a "commands" or "config" response as usual
+`
+
 const explainInstruction = `
 - Include an "explanation" field in each command object with a detailed explanation of how the command works, including what each flag and argument does.
   Example explanations:
@@ -89,12 +117,17 @@ const explainInstruction = `
   - For "grep -rn 'TODO' --include='*.go' .": "Recursively searches all .go files in the current directory for lines containing 'TODO'. -r enables recursive search, -n shows line numbers, --include restricts to files matching the pattern."
 `
 
-func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain bool) string {
+func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain, toolsEnabled bool) string {
 	platformHints := buildPlatformHints(osInfo)
 
 	var explainText string
 	if explain {
 		explainText = explainInstruction
+	}
+
+	var toolText string
+	if toolsEnabled {
+		toolText = toolInstructions
 	}
 
 	r := strings.NewReplacer(
@@ -104,6 +137,7 @@ func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain bool) st
 		"{{CWD}}", cwd,
 		"{{PLATFORM_HINTS}}", platformHints,
 		"{{EXPLAIN_INSTRUCTION}}", explainText,
+		"{{TOOL_INSTRUCTIONS}}", toolText,
 	)
 
 	return r.Replace(promptTemplate)

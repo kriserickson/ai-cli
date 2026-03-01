@@ -16,6 +16,12 @@ const (
 	DebugNone   = "none"
 	DebugScreen = "screen"
 	DebugFile   = "file"
+
+	// ToolCalling modes control whether the AI can use read-only tools.
+	ToolCallingNever           = "never"           // Tools disabled entirely
+	ToolCallingAlwaysPrompt    = "always_prompt"    // Prompt the user before every tool call
+	ToolCallingDangerousPrompt = "dangerous_prompt" // Only prompt when a tool hits a safety rule
+	ToolCallingAlwaysAllow     = "always_allow"     // Execute all tools without prompting
 )
 
 type Config struct {
@@ -39,9 +45,19 @@ type ProviderDetail struct {
 
 type SafetyConfig struct {
 	AlwaysConfirm     bool     `toml:"always_confirm"`
+	ToolCalling       string   `toml:"tool_calling"`
 	MinCertainty      int      `toml:"min_certainty"`
 	AllowlistPrefixes []string `toml:"allowlist_prefixes"`
 	WhitelistPrefixes []string `toml:"whitelist_prefixes,omitempty"` // Deprecated: use allowlist_prefixes
+}
+
+// ValidToolCallingModes returns true if the given mode is a valid tool_calling value.
+func ValidToolCallingMode(mode string) bool {
+	switch mode {
+	case ToolCallingNever, ToolCallingAlwaysPrompt, ToolCallingDangerousPrompt, ToolCallingAlwaysAllow:
+		return true
+	}
+	return false
 }
 
 func DefaultConfig() *Config {
@@ -61,6 +77,7 @@ func DefaultConfig() *Config {
 		},
 		Safety: SafetyConfig{
 			AlwaysConfirm:     false,
+			ToolCalling:       ToolCallingNever,
 			MinCertainty:      80,
 			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
 		},

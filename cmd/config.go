@@ -19,6 +19,7 @@ var configKeys = []string{
 	"llm_key",
 	"llm_url",
 	"always_confirm",
+	"tool_calling",
 	"min_certainty",
 	"debug",
 }
@@ -27,6 +28,7 @@ var configKeys = []string{
 var configKeyValues = map[string][]string{
 	"provider":       {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"always_confirm": {"true", "false"},
+	"tool_calling":   {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
 	"debug":          {config.DebugNone, config.DebugScreen, config.DebugFile},
 }
 
@@ -133,6 +135,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return currentProviderDetail(cfg).BaseURL, nil
 	case "always_confirm":
 		return strconv.FormatBool(cfg.Safety.AlwaysConfirm), nil
+	case "tool_calling":
+		return cfg.Safety.ToolCalling, nil
 	case "min_certainty":
 		return strconv.Itoa(cfg.Safety.MinCertainty), nil
 	case "allowlist":
@@ -163,6 +167,11 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("always_confirm %w", err)
 		}
 		cfg.Safety.AlwaysConfirm = b
+	case "tool_calling":
+		if !config.ValidToolCallingMode(value) {
+			return fmt.Errorf("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
+		}
+		cfg.Safety.ToolCalling = value
 	case "min_certainty":
 		n, err := strconv.Atoi(value)
 		if err != nil {
@@ -178,7 +187,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.Debug = value
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, min_certainty, debug", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug", key)
 	}
 	return nil
 }

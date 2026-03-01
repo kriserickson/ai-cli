@@ -43,6 +43,11 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 				return fmt.Errorf("always_confirm %w", err)
 			}
 			cfg.Safety.AlwaysConfirm = b
+		case "tool_calling":
+			if !ValidToolCallingMode(value) {
+				return fmt.Errorf("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
+			}
+			cfg.Safety.ToolCalling = value
 		case "min_certainty":
 			n, err := strconv.Atoi(value)
 			if err != nil {
