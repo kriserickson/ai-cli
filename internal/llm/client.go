@@ -162,6 +162,7 @@ type ollamaClient struct {
 type ollamaRequest struct {
 	Model  string `json:"model"`
 	Prompt string `json:"prompt"`
+	System string `json:"system,omitempty"`
 	Stream bool   `json:"stream"`
 }
 
@@ -172,10 +173,10 @@ type ollamaResponse struct {
 }
 
 func (c *ollamaClient) Chat(systemPrompt, userMessage string) (*Response, error) {
-	prompt := fmt.Sprintf("System: %s\n\nUser: %s", systemPrompt, userMessage)
 	req := ollamaRequest{
 		Model:  c.model,
-		Prompt: prompt,
+		Prompt: userMessage,
+		System: systemPrompt,
 		Stream: false,
 	}
 
