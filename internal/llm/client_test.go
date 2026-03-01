@@ -357,6 +357,16 @@ func TestOllamaChat_Success(t *testing.T) {
 		if r.Header.Get("Content-Type") != "application/json" {
 			t.Errorf("content-type = %q, want application/json", r.Header.Get("Content-Type"))
 		}
+		var req ollamaRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		if req.System != "system prompt" {
+			t.Errorf("system = %q, want %q", req.System, "system prompt")
+		}
+		if req.Prompt != "list files" {
+			t.Errorf("prompt = %q, want %q", req.Prompt, "list files")
+		}
 		ollamaResp := ollamaResponse{Response: string(respContent), Done: true}
 		if err := json.NewEncoder(w).Encode(ollamaResp); err != nil {
 			t.Errorf("encode: %v", err)
