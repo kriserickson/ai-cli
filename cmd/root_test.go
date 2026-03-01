@@ -302,7 +302,7 @@ func TestRunRootSingleShot_LocalProvider(t *testing.T) {
 			"response": `{"type":"commands","commands":[]}`,
 			"done":     true,
 		}
-		json.NewEncoder(w).Encode(ollamaResp)
+		_ = json.NewEncoder(w).Encode(ollamaResp)
 	}))
 	defer server.Close()
 
