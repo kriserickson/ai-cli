@@ -60,6 +60,18 @@ func promptAPIKey(provider string) (string, error) {
 	return key, nil
 }
 
+func promptLocalBaseURL(current string) (string, error) {
+	var url string
+	err := wizardAskOne(&survey.Input{
+		Message: "Local server base URL:",
+		Default: current,
+	}, &url, survey.WithValidator(survey.Required))
+	if err != nil {
+		return "", err
+	}
+	return url, nil
+}
+
 func ensureAPIKey(cfg *config.Config, provider string) error {
 	if provider == config.ProviderLocal {
 		// API key is optional for local providers
@@ -177,6 +189,14 @@ func RunModelWizard(cfg *config.Config) error {
 
 	if err := ensureAPIKey(cfg, provider); err != nil {
 		return err
+	}
+
+	if provider == config.ProviderLocal {
+		url, err := promptLocalBaseURL(cfg.Provider.Local.BaseURL)
+		if err != nil {
+			return err
+		}
+		cfg.Provider.Local.BaseURL = url
 	}
 
 	model, err := pickModel(cfg, provider)
