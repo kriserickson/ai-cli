@@ -49,8 +49,10 @@ var sensitiveEnvKeys = []string{
 
 // ValidatePath resolves path to an absolute path and checks that it is
 // contained within cwd and does not match any blocked pattern.
+// Symlinks are resolved so that a link inside cwd pointing outside cannot
+// bypass the containment check.
 func ValidatePath(path, cwd string) (string, error) {
-	// Resolve relative to cwd
+	// Resolve relative to cwd lexically first
 	var abs string
 	if filepath.IsAbs(path) {
 		abs = filepath.Clean(path)
@@ -58,13 +60,33 @@ func ValidatePath(path, cwd string) (string, error) {
 		abs = filepath.Clean(filepath.Join(cwd, path))
 	}
 
-	// Ensure the path is under cwd
 	cwdClean := filepath.Clean(cwd)
+
+	// Ensure the lexical path is under cwd
 	if abs != cwdClean && !strings.HasPrefix(abs, cwdClean+string(os.PathSeparator)) {
 		return "", fmt.Errorf("path %q is outside the working directory", path)
 	}
 
-	// Check blocked patterns against the relative path
+	// Resolve symlinks so that a link inside cwd pointing outside is caught.
+	// If EvalSymlinks fails (e.g. the path does not exist yet), fall back to
+	// the lexically cleaned path: no symlink can exist for a non-existent path,
+	// so the lexical containment check above is sufficient in that case.
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		resolvedClean := filepath.Clean(resolved)
+		if resolvedClean != cwdClean && !strings.HasPrefix(resolvedClean, cwdClean+string(os.PathSeparator)) {
+			return "", fmt.Errorf("path %q is outside the working directory", path)
+		}
+		resolvedRel, relErr := filepath.Rel(cwdClean, resolvedClean)
+		if relErr != nil {
+			return "", fmt.Errorf("cannot compute relative path: %w", relErr)
+		}
+		if isBlocked(resolvedRel) {
+			return "", fmt.Errorf("access to %q is blocked for security", path)
+		}
+		return resolvedClean, nil
+	}
+
+	// Check blocked patterns against the lexical relative path
 	rel, err := filepath.Rel(cwdClean, abs)
 	if err != nil {
 		return "", fmt.Errorf("cannot compute relative path: %w", err)

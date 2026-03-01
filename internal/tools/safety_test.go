@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -96,6 +98,31 @@ func TestValidatePath_AllowedFiles(t *testing.T) {
 	}
 }
 
+func TestValidatePath_Symlink(t *testing.T) {
+	// Create a temporary directory to act as cwd
+	cwd := t.TempDir()
+	// Create a file outside cwd
+	outside := t.TempDir()
+	secretFile := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secretFile, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Create a symlink inside cwd pointing to the file outside cwd
+	symlink := filepath.Join(cwd, "link.txt")
+	if err := os.Symlink(secretFile, symlink); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	_, err := ValidatePath("link.txt", cwd)
+	if err == nil {
+		t.Error("ValidatePath with symlink escaping cwd should have failed")
+	}
+	if err != nil && !strings.Contains(err.Error(), "outside") {
+		t.Errorf("expected 'outside' error, got: %v", err)
+	}
+}
+
 func TestFilterEnvironment(t *testing.T) {
 	vars := []string{
 		"HOME=/home/user",
@@ -117,7 +144,7 @@ func TestFilterEnvironment(t *testing.T) {
 		"PATH":                  "/usr/bin",
 		"API_KEY":               "[REDACTED]",
 		"AWS_SECRET_ACCESS_KEY": "[REDACTED]",
-		"DATABASE_URL":          "postgres://localhost",
+		"DATABASE_URL":          "[REDACTED]",
 		"AUTH_TOKEN":            "[REDACTED]",
 		"MY_PASSWORD":           "[REDACTED]",
 		"PRIVATE_DATA":          "[REDACTED]",
