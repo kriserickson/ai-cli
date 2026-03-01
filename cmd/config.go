@@ -169,7 +169,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Safety.AlwaysConfirm = b
 	case "tool_calling":
 		if !config.ValidToolCallingMode(value) {
-			return fmt.Errorf("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
+			return errors.New("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
 		}
 		cfg.Safety.ToolCalling = value
 	case "min_certainty":

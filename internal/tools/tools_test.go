@@ -43,7 +43,11 @@ func TestExecute_ListDirectory(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	}()
 
 	output, err := Execute("list_directory", map[string]string{"path": "."}, shell.Info{})
 	if err != nil {
@@ -65,7 +69,11 @@ func TestExecute_ReadFile(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	}()
 
 	output, err := Execute("read_file", map[string]string{"path": "test.txt"}, shell.Info{})
 	if err != nil {
@@ -88,7 +96,11 @@ func TestExecute_ReadFile_TooLarge(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	}()
 
 	_, err := Execute("read_file", map[string]string{"path": "big.txt"}, shell.Info{})
 	if err == nil {
@@ -109,7 +121,11 @@ func TestExecute_ReadFile_Blocked(t *testing.T) {
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Chdir(oldWd)
+	defer func() {
+		if err := os.Chdir(oldWd); err != nil {
+			t.Fatalf("restore working directory: %v", err)
+		}
+	}()
 
 	_, err := Execute("read_file", map[string]string{"path": ".env"}, shell.Info{})
 	if err == nil {

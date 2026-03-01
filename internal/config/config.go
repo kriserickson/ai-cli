@@ -18,7 +18,7 @@ const (
 	DebugFile   = "file"
 
 	// ToolCalling modes control whether the AI can use read-only tools.
-	ToolCallingNever           = "never"           // Tools disabled entirely
+	ToolCallingNever           = "never"            // Tools disabled entirely
 	ToolCallingAlwaysPrompt    = "always_prompt"    // Prompt the user before every tool call
 	ToolCallingDangerousPrompt = "dangerous_prompt" // Only prompt when a tool hits a safety rule
 	ToolCallingAlwaysAllow     = "always_allow"     // Execute all tools without prompting

@@ -45,7 +45,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 			cfg.Safety.AlwaysConfirm = b
 		case "tool_calling":
 			if !ValidToolCallingMode(value) {
-				return fmt.Errorf("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
+				return errors.New("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
 			}
 			cfg.Safety.ToolCalling = value
 		case "min_certainty":

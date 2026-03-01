@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -119,10 +120,6 @@ func TestRunWithTools_AlwaysAllowMode_NoPrompt(t *testing.T) {
 }
 
 func TestRunWithTools_AlwaysPromptMode_Approved(t *testing.T) {
-	origConfirm := ConfirmFunc
-	defer func() { ConfirmFunc = origConfirm }()
-	ConfirmFunc = func(string, map[string]string, string) bool { return true }
-
 	client := &mockClient{
 		responses: []*llm.Response{
 			{Type: "tool_request", Tool: "disk_usage", ToolArgs: map[string]string{}},
@@ -130,7 +127,9 @@ func TestRunWithTools_AlwaysPromptMode_Approved(t *testing.T) {
 		},
 	}
 
-	resp, err := RunWithTools(client, "system", "show disk", toolCallingCfg(config.ToolCallingAlwaysPrompt), shell.Info{}, 3)
+	resp, err := runWithTools(client, "system", "show disk", toolCallingCfg(config.ToolCallingAlwaysPrompt), shell.Info{}, 3, func(string, map[string]string, string) bool {
+		return true
+	})
 	if err != nil {
 		t.Fatalf("RunWithTools error: %v", err)
 	}
@@ -143,10 +142,6 @@ func TestRunWithTools_AlwaysPromptMode_Approved(t *testing.T) {
 }
 
 func TestRunWithTools_AlwaysPromptMode_Denied(t *testing.T) {
-	origConfirm := ConfirmFunc
-	defer func() { ConfirmFunc = origConfirm }()
-	ConfirmFunc = func(string, map[string]string, string) bool { return false }
-
 	client := &mockClient{
 		responses: []*llm.Response{
 			{Type: "tool_request", Tool: "disk_usage", ToolArgs: map[string]string{}},
@@ -154,7 +149,9 @@ func TestRunWithTools_AlwaysPromptMode_Denied(t *testing.T) {
 		},
 	}
 
-	resp, err := RunWithTools(client, "system", "show disk", toolCallingCfg(config.ToolCallingAlwaysPrompt), shell.Info{}, 3)
+	resp, err := runWithTools(client, "system", "show disk", toolCallingCfg(config.ToolCallingAlwaysPrompt), shell.Info{}, 3, func(string, map[string]string, string) bool {
+		return false
+	})
 	if err != nil {
 		t.Fatalf("RunWithTools error: %v", err)
 	}
@@ -179,9 +176,7 @@ func TestRunWithTools_AlwaysPromptMode_Denied(t *testing.T) {
 func TestRunWithTools_DangerousPromptMode_SafeToolNoPrompt(t *testing.T) {
 	// In dangerous_prompt mode, a safe tool (no safety issue) should NOT prompt
 	promptCalled := false
-	origConfirm := ConfirmFunc
-	defer func() { ConfirmFunc = origConfirm }()
-	ConfirmFunc = func(string, map[string]string, string) bool {
+	confirm := func(string, map[string]string, string) bool {
 		promptCalled = true
 		return true
 	}
@@ -193,7 +188,7 @@ func TestRunWithTools_DangerousPromptMode_SafeToolNoPrompt(t *testing.T) {
 		},
 	}
 
-	resp, err := RunWithTools(client, "system", "show disk", toolCallingCfg(config.ToolCallingDangerousPrompt), shell.Info{}, 3)
+	resp, err := runWithTools(client, "system", "show disk", toolCallingCfg(config.ToolCallingDangerousPrompt), shell.Info{}, 3, confirm)
 	if err != nil {
 		t.Fatalf("RunWithTools error: %v", err)
 	}
@@ -248,7 +243,7 @@ func TestRunWithTools_MaxIterations(t *testing.T) {
 func TestRunWithTools_ClientError(t *testing.T) {
 	client := &mockClient{
 		responses: []*llm.Response{nil},
-		errors:    []error{errTest},
+		errors:    []error{errors.New("test error")},
 	}
 
 	_, err := RunWithTools(client, "system", "test", toolCallingCfg(config.ToolCallingAlwaysAllow), shell.Info{}, 3)
@@ -256,9 +251,3 @@ func TestRunWithTools_ClientError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
-
-var errTest = &testError{}
-
-type testError struct{}
-
-func (e *testError) Error() string { return "test error" }

@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,7 +13,10 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
-const maxOutputBytes = 4096
+const (
+	maxOutputBytes = 4096
+	windowsOS      = "windows"
+)
 
 // ToolDef describes a tool the AI can request.
 type ToolDef struct {
@@ -36,7 +41,7 @@ var Registry = []ToolDef{
 }
 
 // Execute runs the named tool with the given args and returns its output.
-func Execute(toolName string, args map[string]string, shellInfo shell.Info) (string, error) {
+func Execute(toolName string, args map[string]string, _ shell.Info) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("cannot get working directory: %w", err)
@@ -62,11 +67,11 @@ func Execute(toolName string, args map[string]string, shellInfo shell.Info) (str
 	case "ping":
 		output, err = execPing(args["host"])
 	case "check_command":
-		output, err = execCheckCommand(args["command"], shellInfo)
+		output, err = execCheckCommand(args["command"])
 	case "disk_usage":
 		output, err = execDiskUsage()
 	case "environment":
-		output, err = execEnvironment()
+		output = execEnvironment()
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
@@ -98,10 +103,10 @@ func execListDirectory(path, cwd string) (string, error) {
 	}
 
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Get-ChildItem '%s'", absPath))
+	if runtime.GOOS == windowsOS {
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", fmt.Sprintf("Get-ChildItem '%s'", absPath))
 	} else {
-		cmd = exec.Command("ls", "-la", absPath)
+		cmd = exec.CommandContext(context.Background(), "ls", "-la", absPath)
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -112,7 +117,7 @@ func execListDirectory(path, cwd string) (string, error) {
 
 func execReadFile(path, cwd string) (string, error) {
 	if path == "" {
-		return "", fmt.Errorf("read_file requires a path argument")
+		return "", errors.New("read_file requires a path argument")
 	}
 	absPath, err := ValidatePath(path, cwd)
 	if err != nil {
@@ -139,11 +144,11 @@ func execReadFile(path, cwd string) (string, error) {
 
 func execCommandHelp(command string) (string, error) {
 	if command == "" {
-		return "", fmt.Errorf("command_help requires a command argument")
+		return "", errors.New("command_help requires a command argument")
 	}
 
-	if runtime.GOOS == "windows" {
-		cmd := exec.Command("powershell", "-Command", fmt.Sprintf("Get-Help '%s'", command))
+	if runtime.GOOS == windowsOS {
+		cmd := exec.CommandContext(context.Background(), "powershell", "-Command", fmt.Sprintf("Get-Help '%s'", command))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("Get-Help failed: %s", string(out))
@@ -153,14 +158,14 @@ func execCommandHelp(command string) (string, error) {
 
 	// Try tldr first, fall back to man
 	if tldrPath, err := exec.LookPath("tldr"); err == nil {
-		cmd := exec.Command(tldrPath, command)
+		cmd := exec.CommandContext(context.Background(), tldrPath, command)
 		out, err := cmd.CombinedOutput()
 		if err == nil {
 			return string(out), nil
 		}
 	}
 
-	cmd := exec.Command("man", command)
+	cmd := exec.CommandContext(context.Background(), "man", command)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("man page not found for %q", command)
@@ -185,10 +190,10 @@ func execListMemories() (string, error) {
 
 func execListProcesses() (string, error) {
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", "Get-Process | Format-Table -AutoSize")
+	if runtime.GOOS == windowsOS {
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Process | Format-Table -AutoSize")
 	} else {
-		cmd = exec.Command("ps", "aux")
+		cmd = exec.CommandContext(context.Background(), "ps", "aux")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -200,12 +205,12 @@ func execListProcesses() (string, error) {
 func execSystemResources() (string, error) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("powershell", "-Command", "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 | Format-Table Name,CPU,WorkingSet -AutoSize")
+	case windowsOS:
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 | Format-Table Name,CPU,WorkingSet -AutoSize")
 	case "darwin":
-		cmd = exec.Command("top", "-l", "1", "-n", "5", "-s", "0")
+		cmd = exec.CommandContext(context.Background(), "top", "-l", "1", "-n", "5", "-s", "0")
 	default: // linux
-		cmd = exec.Command("top", "-bn1", "-o", "%CPU")
+		cmd = exec.CommandContext(context.Background(), "top", "-bn1", "-o", "%CPU")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -216,10 +221,10 @@ func execSystemResources() (string, error) {
 
 func execNetworkConnections() (string, error) {
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", "Get-NetTCPConnection | Format-Table -AutoSize")
+	if runtime.GOOS == windowsOS {
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-NetTCPConnection | Format-Table -AutoSize")
 	} else {
-		cmd = exec.Command("netstat", "-an")
+		cmd = exec.CommandContext(context.Background(), "netstat", "-an")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -230,47 +235,43 @@ func execNetworkConnections() (string, error) {
 
 func execPing(host string) (string, error) {
 	if host == "" {
-		return "", fmt.Errorf("ping requires a host argument")
+		return "", errors.New("ping requires a host argument")
 	}
 
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("ping", "-n", "3", host)
+	if runtime.GOOS == windowsOS {
+		cmd = exec.CommandContext(context.Background(), "ping", "-n", "3", host)
 	} else {
-		cmd = exec.Command("ping", "-c", "3", host)
+		cmd = exec.CommandContext(context.Background(), "ping", "-c", "3", host)
 	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		// ping returns non-zero for unreachable hosts; still return output
-		return string(out), nil
-	}
+	out, _ := cmd.CombinedOutput()
 	return string(out), nil
 }
 
-func execCheckCommand(command string, shellInfo shell.Info) (string, error) {
+func execCheckCommand(command string) (string, error) {
 	if command == "" {
-		return "", fmt.Errorf("check_command requires a command argument")
+		return "", errors.New("check_command requires a command argument")
 	}
 
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", fmt.Sprintf("Get-Command '%s'", command))
+	if runtime.GOOS == windowsOS {
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", fmt.Sprintf("Get-Command '%s'", command))
 	} else {
-		cmd = exec.Command("which", command)
+		cmd = exec.CommandContext(context.Background(), "which", command)
 	}
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Sprintf("%s: not found", command), nil
+	out, _ := cmd.CombinedOutput()
+	if len(out) == 0 {
+		return command + ": not found", nil
 	}
 	return strings.TrimSpace(string(out)), nil
 }
 
 func execDiskUsage() (string, error) {
 	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("powershell", "-Command", "Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free -AutoSize")
+	if runtime.GOOS == windowsOS {
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free -AutoSize")
 	} else {
-		cmd = exec.Command("df", "-h")
+		cmd = exec.CommandContext(context.Background(), "df", "-h")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -279,10 +280,10 @@ func execDiskUsage() (string, error) {
 	return string(out), nil
 }
 
-func execEnvironment() (string, error) {
+func execEnvironment() string {
 	vars := os.Environ()
 	filtered := FilterEnvironment(vars)
-	return strings.Join(filtered, "\n"), nil
+	return strings.Join(filtered, "\n")
 }
 
 func truncateOutput(s string) string {

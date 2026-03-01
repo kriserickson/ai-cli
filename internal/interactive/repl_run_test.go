@@ -212,7 +212,7 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
 
 	var promptArgs []string
-	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, toolsEnabled bool) string {
+	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, _ bool) string {
 		promptArgs = []string{osName, shellName, shellVersion, cwd}
 		return "system-prompt"
 	}

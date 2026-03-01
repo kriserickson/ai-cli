@@ -13,8 +13,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
-// ConfirmFunc prompts the user for tool confirmation. Replaceable in tests.
-var ConfirmFunc = defaultConfirm
+type confirmFunc func(toolName string, args map[string]string, reason string) bool
 
 func defaultConfirm(toolName string, args map[string]string, reason string) bool {
 	argsStr := ""
@@ -39,6 +38,10 @@ func defaultConfirm(toolName string, args map[string]string, reason string) bool
 // (up to maxIter iterations). Returns the final non-tool response.
 // If tool_calling is "never", it calls the LLM once with Chat() (no tool loop).
 func RunWithTools(client llm.Client, systemPrompt, userMessage string, cfg *config.Config, shellInfo shell.Info, maxIter int) (*llm.Response, error) {
+	return runWithTools(client, systemPrompt, userMessage, cfg, shellInfo, maxIter, defaultConfirm)
+}
+
+func runWithTools(client llm.Client, systemPrompt, userMessage string, cfg *config.Config, shellInfo shell.Info, maxIter int, confirm confirmFunc) (*llm.Response, error) {
 	// If tools are disabled, just do a simple chat call
 	if cfg.Safety.ToolCalling == config.ToolCallingNever {
 		return client.Chat(systemPrompt, userMessage)
@@ -49,7 +52,7 @@ func RunWithTools(client llm.Client, systemPrompt, userMessage string, cfg *conf
 		{Role: "user", Content: userMessage},
 	}
 
-	for i := 0; i < maxIter; i++ {
+	for range maxIter {
 		resp, err := client.ChatMessages(messages)
 		if err != nil {
 			return nil, err
@@ -70,13 +73,13 @@ func RunWithTools(client llm.Client, systemPrompt, userMessage string, cfg *conf
 		// Determine whether to prompt based on mode
 		switch cfg.Safety.ToolCalling {
 		case config.ToolCallingAlwaysPrompt:
-			if !ConfirmFunc(resp.Tool, resp.ToolArgs, "") {
+			if !confirm(resp.Tool, resp.ToolArgs, "") {
 				messages = appendDenial(messages, resp)
 				continue
 			}
 		case config.ToolCallingDangerousPrompt:
 			if safetyIssue != "" {
-				if !ConfirmFunc(resp.Tool, resp.ToolArgs, safetyIssue) {
+				if !confirm(resp.Tool, resp.ToolArgs, safetyIssue) {
 					messages = appendDenial(messages, resp)
 					continue
 				}
@@ -89,7 +92,7 @@ func RunWithTools(client llm.Client, systemPrompt, userMessage string, cfg *conf
 		color.Cyan("Using tool: %s", resp.Tool)
 		output, err := Execute(resp.Tool, resp.ToolArgs, shellInfo)
 		if err != nil {
-			output = fmt.Sprintf("Tool error: %s", err.Error())
+			output = "Tool error: " + err.Error()
 		}
 
 		// Build follow-up messages
