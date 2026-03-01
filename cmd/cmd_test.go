@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/kriserickson/ai-cli/internal/config"
 )
@@ -31,7 +34,7 @@ func runCmd(t *testing.T, args ...string) (string, error) {
 	os.Stdout = saved
 
 	var buf bytes.Buffer
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	r.Close()
 	return buf.String(), execErr
 }
@@ -163,6 +166,21 @@ func TestSetConfigValue_LlmUrl(t *testing.T) {
 	}
 	if cfg.Provider.OpenRouter.BaseURL != "https://custom.example.com" {
 		t.Errorf("OpenRouter.BaseURL = %q, want %q", cfg.Provider.OpenRouter.BaseURL, "https://custom.example.com")
+	}
+}
+
+func TestCurrentProviderDetail_Local(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderLocal
+	cfg.Provider.Local.APIKey = "local-test-key"
+	cfg.Provider.Local.BaseURL = "http://localhost:11434"
+
+	pd := currentProviderDetail(cfg)
+	if pd.APIKey != "local-test-key" {
+		t.Errorf("local APIKey = %q, want %q", pd.APIKey, "local-test-key")
+	}
+	if pd.BaseURL != "http://localhost:11434" {
+		t.Errorf("local BaseURL = %q, want %q", pd.BaseURL, "http://localhost:11434")
 	}
 }
 
@@ -317,6 +335,291 @@ func TestHasNoglobAlias(t *testing.T) {
 				t.Errorf("hasNoglobAlias() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// --- config completion functions ---
+
+func TestConfigGetCompletion(t *testing.T) {
+	// Find the "get" subcommand under "config"
+	configCmd, _, _ := rootCmd.Find([]string{"config"})
+	if configCmd == nil {
+		t.Fatal("config command not found")
+	}
+
+	var getCmd *cobra.Command
+	for _, c := range configCmd.Commands() {
+		if c.Use == "get <key>" {
+			getCmd = c
+			break
+		}
+	}
+	if getCmd == nil {
+		t.Fatal("config get command not found")
+	}
+
+	if getCmd.ValidArgsFunction == nil {
+		t.Fatal("ValidArgsFunction not set on config get")
+	}
+
+	// No args yet: should suggest configKeys
+	completions, dir := getCmd.ValidArgsFunction(getCmd, nil, "")
+	if dir != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("directive = %v, want NoFileComp", dir)
+	}
+	if len(completions) == 0 {
+		t.Error("expected completions for config get with no args")
+	}
+
+	// Already have one arg: should return nil
+	completions, _ = getCmd.ValidArgsFunction(getCmd, []string{"model"}, "")
+	if completions != nil {
+		t.Errorf("expected nil completions when arg already provided, got %v", completions)
+	}
+}
+
+func TestConfigSetCompletion(t *testing.T) {
+	configCmd, _, _ := rootCmd.Find([]string{"config"})
+	if configCmd == nil {
+		t.Fatal("config command not found")
+	}
+
+	var setCmd *cobra.Command
+	for _, c := range configCmd.Commands() {
+		if c.Use == "set <key> <value>" {
+			setCmd = c
+			break
+		}
+	}
+	if setCmd == nil {
+		t.Fatal("config set command not found")
+	}
+
+	if setCmd.ValidArgsFunction == nil {
+		t.Fatal("ValidArgsFunction not set on config set")
+	}
+
+	// No args: should suggest keys
+	completions, dir := setCmd.ValidArgsFunction(setCmd, nil, "")
+	if dir != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("directive = %v, want NoFileComp", dir)
+	}
+	if len(completions) == 0 {
+		t.Error("expected key completions")
+	}
+
+	// One arg "provider": should suggest values
+	completions, dir = setCmd.ValidArgsFunction(setCmd, []string{"provider"}, "")
+	if dir != cobra.ShellCompDirectiveNoFileComp {
+		t.Errorf("directive = %v, want NoFileComp", dir)
+	}
+	if len(completions) != 3 {
+		t.Errorf("expected 3 provider completions, got %d", len(completions))
+	}
+
+	// One arg "model": no fixed values
+	completions, _ = setCmd.ValidArgsFunction(setCmd, []string{"model"}, "")
+	if completions != nil {
+		t.Errorf("expected nil completions for model value, got %v", completions)
+	}
+
+	// Two args: no more completions
+	completions, _ = setCmd.ValidArgsFunction(setCmd, []string{"provider", "openai"}, "")
+	if completions != nil {
+		t.Errorf("expected nil completions with 2 args, got %v", completions)
+	}
+}
+
+// --- config show/get/set via cobra ---
+
+func TestConfigShow_ContainsAllSections(t *testing.T) {
+	tempHome(t)
+
+	out, err := runCmd(t, "config", "show")
+	if err != nil {
+		t.Fatalf("config show error: %v", err)
+	}
+	// Verify TOML structure
+	for _, want := range []string{"[provider]", "[safety]", "debug"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("config show missing %q", want)
+		}
+	}
+}
+
+func TestConfigSet_DebugValue(t *testing.T) {
+	tempHome(t)
+
+	if _, err := runCmd(t, "config", "set", "debug", "screen"); err != nil {
+		t.Fatalf("config set debug: %v", err)
+	}
+
+	out, err := runCmd(t, "config", "get", "debug")
+	if err != nil {
+		t.Fatalf("config get debug: %v", err)
+	}
+	if !strings.Contains(out, "screen") {
+		t.Errorf("config get debug = %q, want 'screen'", strings.TrimSpace(out))
+	}
+}
+
+func TestConfigSet_InvalidDebugValue(t *testing.T) {
+	tempHome(t)
+
+	_, err := runCmd(t, "config", "set", "debug", "verbose")
+	if err == nil {
+		t.Error("expected error for invalid debug value")
+	}
+}
+
+func TestConfigSet_AlwaysConfirm(t *testing.T) {
+	tempHome(t)
+
+	if _, err := runCmd(t, "config", "set", "always_confirm", "true"); err != nil {
+		t.Fatalf("config set always_confirm: %v", err)
+	}
+
+	out, err := runCmd(t, "config", "get", "always_confirm")
+	if err != nil {
+		t.Fatalf("config get always_confirm: %v", err)
+	}
+	if !strings.Contains(out, "true") {
+		t.Errorf("config get always_confirm = %q, want 'true'", strings.TrimSpace(out))
+	}
+}
+
+func TestConfigSet_MinCertainty(t *testing.T) {
+	tempHome(t)
+
+	if _, err := runCmd(t, "config", "set", "min_certainty", "95"); err != nil {
+		t.Fatalf("config set min_certainty: %v", err)
+	}
+
+	out, err := runCmd(t, "config", "get", "min_certainty")
+	if err != nil {
+		t.Fatalf("config get min_certainty: %v", err)
+	}
+	if !strings.Contains(out, "95") {
+		t.Errorf("config get min_certainty = %q, want '95'", strings.TrimSpace(out))
+	}
+}
+
+func TestConfigSet_URLs(t *testing.T) {
+	tempHome(t)
+
+	if _, err := runCmd(t, "config", "set", "openai_url", "https://proxy.example.com/v1"); err != nil {
+		t.Fatalf("config set openai_url: %v", err)
+	}
+	out, err := runCmd(t, "config", "get", "openai_url")
+	if err != nil {
+		t.Fatalf("config get openai_url: %v", err)
+	}
+	if !strings.Contains(out, "https://proxy.example.com/v1") {
+		t.Errorf("openai_url = %q", strings.TrimSpace(out))
+	}
+}
+
+func TestConfigShow_LoadError(t *testing.T) {
+	tempHome(t)
+
+	// Write an invalid TOML file
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runCmd(t, "config", "show")
+	if err == nil {
+		t.Error("expected error for invalid config, got nil")
+	}
+}
+
+func TestConfigGet_LoadError(t *testing.T) {
+	tempHome(t)
+
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runCmd(t, "config", "get", "model")
+	if err == nil {
+		t.Error("expected error for invalid config, got nil")
+	}
+}
+
+func TestConfigSet_LoadError(t *testing.T) {
+	tempHome(t)
+
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := runCmd(t, "config", "set", "model", "gpt-4o")
+	if err == nil {
+		t.Error("expected error for invalid config, got nil")
+	}
+}
+
+// --- memory commands ---
+
+func TestMemoryAddListRemove(t *testing.T) {
+	tempHome(t)
+
+	// Add a memory
+	if _, err := runCmd(t, "memory", "add", "docker", "always use docker compose v2"); err != nil {
+		t.Fatalf("memory add: %v", err)
+	}
+
+	// List memories
+	out, err := runCmd(t, "memory", "list")
+	if err != nil {
+		t.Fatalf("memory list: %v", err)
+	}
+	if !strings.Contains(out, "docker") {
+		t.Errorf("memory list output missing 'docker'\n%s", out)
+	}
+	if !strings.Contains(out, "always use docker compose v2") {
+		t.Errorf("memory list output missing content\n%s", out)
+	}
+
+	// Remove the memory
+	if _, err := runCmd(t, "memory", "remove", "docker"); err != nil {
+		t.Fatalf("memory remove: %v", err)
+	}
+
+	// List should now be empty
+	out, err = runCmd(t, "memory", "list")
+	if err != nil {
+		t.Fatalf("memory list after remove: %v", err)
+	}
+	if !strings.Contains(out, "No memories stored") {
+		t.Errorf("expected 'No memories stored' after remove\n%s", out)
+	}
+}
+
+func TestMemoryListEmpty(t *testing.T) {
+	tempHome(t)
+
+	out, err := runCmd(t, "memory", "list")
+	if err != nil {
+		t.Fatalf("memory list: %v", err)
+	}
+	if !strings.Contains(out, "No memories stored") {
+		t.Errorf("expected 'No memories stored'\n%s", out)
 	}
 }
 

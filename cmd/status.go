@@ -26,12 +26,12 @@ func runStatus(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	configPath, err := config.ConfigPath()
+	configPath, err := config.Path()
 	if err != nil {
 		return err
 	}
 
-	configDir, err := config.ConfigDir()
+	configDir, err := config.Dir()
 	if err != nil {
 		return err
 	}

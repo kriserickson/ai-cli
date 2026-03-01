@@ -14,10 +14,16 @@ import (
 	"github.com/kriserickson/ai-cli/internal/executor"
 	"github.com/kriserickson/ai-cli/internal/interactive"
 	"github.com/kriserickson/ai-cli/internal/llm"
+	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
+const windows = "windows"
+
 var debugFlag string
+
+// interactiveRun is the entry point for interactive mode, stubbable for testing.
+var interactiveRun = interactive.Run
 
 var rootCmd = &cobra.Command{
 	Use:                "ai [instruction]",
@@ -32,8 +38,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
-	// When --debug is given without a value, default to "screen"
-	rootCmd.Flags().Lookup("debug").NoOptDefVal = "screen"
+	// When --debug is given without a value, default to config.DebugScreen
+	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -124,8 +130,38 @@ func runRoot(_ *cobra.Command, args []string) error {
 				}
 				return nil
 			},
+			MemoryRun: func(args []string) error {
+				if len(args) == 0 {
+					return listMemories()
+				}
+				switch args[0] {
+				case "list":
+					return listMemories()
+				case "add":
+					if len(args) < 3 {
+						return errors.New("usage: memory add <keyword> <content...>")
+					}
+					keyword := args[1]
+					content := strings.Join(args[2:], " ")
+					if err := memory.Add(keyword, content); err != nil {
+						return err
+					}
+					fmt.Printf("Memory %q added.\n", keyword)
+				case "remove":
+					if len(args) < 2 {
+						return errors.New("usage: memory remove <keyword>")
+					}
+					if err := memory.Remove(args[1]); err != nil {
+						return err
+					}
+					fmt.Printf("Memory %q removed.\n", args[1])
+				default:
+					return fmt.Errorf("unknown memory subcommand: %s\nUsage: memory list | memory add <keyword> <content...> | memory remove <keyword>", args[0])
+				}
+				return nil
+			},
 		}
-		return interactive.Run(Version, cmds, cfg, client, shellInfo)
+		return interactiveRun(Version, cmds, cfg, client, shellInfo)
 	}
 
 	// Single-shot mode
@@ -141,6 +177,19 @@ func runRoot(_ *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
 	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd)
+
+	// Inject matching memories into the system prompt
+	entries, err := memory.Load()
+	if err == nil {
+		matches := memory.FindMatching(instruction, entries)
+		if len(matches) > 0 {
+			contexts := make([]llm.MemoryContext, len(matches))
+			for i, m := range matches {
+				contexts[i] = llm.MemoryContext{Keyword: m.Keyword, Content: m.Content}
+			}
+			systemPrompt = llm.AppendMemories(systemPrompt, contexts)
+		}
+	}
 
 	resp, err := client.Chat(systemPrompt, instruction)
 	if err != nil {
@@ -161,7 +210,7 @@ func handleConfig(resp *llm.Response, cfg *config.Config) error {
 	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
 	fmt.Print("Apply? [Y/n] ")
 	var input string
-	fmt.Scanln(&input)
+	_, _ = fmt.Scanln(&input)
 	input = strings.TrimSpace(strings.ToLower(input))
 	if input != "" && input != "y" && input != "yes" {
 		fmt.Println("Skipped.")

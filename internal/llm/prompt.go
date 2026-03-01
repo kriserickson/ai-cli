@@ -94,6 +94,32 @@ func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string) string {
 	return r.Replace(promptTemplate)
 }
 
+// MemoryContext represents a matched memory to inject into the prompt.
+type MemoryContext struct {
+	Keyword string
+	Content string
+}
+
+// AppendMemories appends user-defined memory context to the system prompt.
+// Returns the original prompt if memories is empty.
+func AppendMemories(systemPrompt string, memories []MemoryContext) string {
+	if len(memories) == 0 {
+		return systemPrompt
+	}
+
+	var b strings.Builder
+	b.WriteString(systemPrompt)
+	b.WriteString("\n\nUser-defined context (use this information when relevant):\n")
+	for _, m := range memories {
+		b.WriteString("- \"")
+		b.WriteString(m.Keyword)
+		b.WriteString("\": ")
+		b.WriteString(m.Content)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
 func buildPlatformHints(osInfo string) string {
 	switch {
 	case strings.HasPrefix(osInfo, "darwin"):

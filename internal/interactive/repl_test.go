@@ -40,7 +40,7 @@ func testCfg(t *testing.T) *config.Config {
 	return config.DefaultConfig()
 }
 
-func TestPrintHelp(t *testing.T) {
+func TestPrintHelp(_ *testing.T) {
 	printHelp()
 }
 

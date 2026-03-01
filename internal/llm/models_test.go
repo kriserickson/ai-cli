@@ -47,7 +47,7 @@ func TestFetchOpenRouterModels_Success(t *testing.T) {
 func TestFetchOpenRouterModels_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 
@@ -109,7 +109,7 @@ func TestFetchOpenAIModels_Success(t *testing.T) {
 func TestFetchOpenAIModels_HTTPError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
-		w.Write([]byte(`{"error": "unauthorized"}`))
+		_, _ = w.Write([]byte(`{"error": "unauthorized"}`))
 	}))
 	defer server.Close()
 
@@ -119,6 +119,206 @@ func TestFetchOpenAIModels_HTTPError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "401") {
 		t.Errorf("error = %q, want it to mention 401", err.Error())
+	}
+}
+
+func TestFetchOpenRouterModels_WithAuthHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth != "Bearer sk-or-test" {
+			t.Errorf("auth = %q, want %q", auth, "Bearer sk-or-test")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "anthropic/claude-3.5-sonnet", "name": "Claude"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchOpenRouterModels(server.URL, "sk-or-test")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("len(models) = %d, want 1", len(models))
+	}
+}
+
+func TestFetchOpenRouterModels_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	_, err := FetchOpenRouterModels(server.URL, "")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "decode OpenRouter models") {
+		t.Errorf("error = %q, want decode error", err.Error())
+	}
+}
+
+func TestFetchOpenRouterModels_EmptyPrefixModel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "/some-model", "name": "Empty Prefix"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchOpenRouterModels(server.URL, "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("len(models) = %d, want 1", len(models))
+	}
+	// Empty prefix should stay as "Other" since prefix is empty
+	if models[0].Company != "Other" {
+		t.Errorf("company = %q, want %q", models[0].Company, "Other")
+	}
+}
+
+func TestFetchOpenAIModels_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	_, err := FetchOpenAIModels(server.URL, "test-key")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "decode OpenAI models") {
+		t.Errorf("error = %q, want decode error", err.Error())
+	}
+}
+
+func TestFetchOpenAIModels_NoGPTModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "dall-e-3", "created": 1},
+				{"id": "text-embedding-3-small", "created": 2},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchOpenAIModels(server.URL, "test-key")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(models) != 0 {
+		t.Errorf("len(models) = %d, want 0 (no gpt- models)", len(models))
+	}
+}
+
+// --- FetchLocalModels ---
+
+func TestFetchLocalModels_Success(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/tags" {
+			t.Errorf("path = %s, want /api/tags", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"models": []map[string]interface{}{
+				{"name": "llama3:latest"},
+				{"name": "codellama:7b"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchLocalModels(server.URL + "/api/generate")
+	if err != nil {
+		t.Fatalf("FetchLocalModels error: %v", err)
+	}
+	if len(models) != 2 {
+		t.Fatalf("len(models) = %d, want 2", len(models))
+	}
+	if models[0].ID != "llama3:latest" {
+		t.Errorf("models[0].ID = %q, want %q", models[0].ID, "llama3:latest")
+	}
+	if models[0].Company != "Local" {
+		t.Errorf("models[0].Company = %q, want %q", models[0].Company, "Local")
+	}
+	if models[1].ID != "codellama:7b" {
+		t.Errorf("models[1].ID = %q, want %q", models[1].ID, "codellama:7b")
+	}
+}
+
+func TestFetchLocalModels_HTTPError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte("server error"))
+	}))
+	defer server.Close()
+
+	_, err := FetchLocalModels(server.URL + "/api/generate")
+	if err == nil {
+		t.Fatal("expected error for 500 response")
+	}
+	if !strings.Contains(err.Error(), "local models API error") {
+		t.Errorf("error = %q, want local models API error", err.Error())
+	}
+}
+
+func TestFetchLocalModels_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	_, err := FetchLocalModels(server.URL + "/api/generate")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "decode local models") {
+		t.Errorf("error = %q, want decode error", err.Error())
+	}
+}
+
+func TestFetchLocalModels_EmptyModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"models": []map[string]interface{}{},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchLocalModels(server.URL + "/api/generate")
+	if err != nil {
+		t.Fatalf("FetchLocalModels error: %v", err)
+	}
+	if len(models) != 0 {
+		t.Errorf("len(models) = %d, want 0", len(models))
+	}
+}
+
+func TestFetchLocalModels_NonStandardBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/tags" {
+			t.Errorf("path = %s, want /tags", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"models": []map[string]interface{}{
+				{"name": "test-model"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	// Use a non-standard URL that doesn't end in /api/generate
+	models, err := FetchLocalModels(server.URL + "/custom")
+	if err != nil {
+		t.Fatalf("FetchLocalModels error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("len(models) = %d, want 1", len(models))
 	}
 }
 

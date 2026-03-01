@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,10 +9,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AlecAivazis/survey/v2"
+
 	"github.com/kriserickson/ai-cli/internal/config"
+	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
-func saveCmdConfig(t *testing.T, mutate func(*config.Config)) *config.Config {
+func saveCmdConfig(t *testing.T, mutate func(*config.Config)) {
 	t.Helper()
 	tempHome(t)
 
@@ -22,7 +26,24 @@ func saveCmdConfig(t *testing.T, mutate func(*config.Config)) *config.Config {
 	if err := config.Save(cfg); err != nil {
 		t.Fatalf("config.Save: %v", err)
 	}
-	return cfg
+}
+
+func TestRunStatus_LoadError(t *testing.T) {
+	tempHome(t)
+
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runStatus(nil, nil)
+	if err == nil {
+		t.Fatal("runStatus() error = nil, want load error")
+	}
 }
 
 func TestRunStatus_NoLog_APIKeyMissing(t *testing.T) {
@@ -38,7 +59,7 @@ func TestRunStatus_NoLog_APIKeyMissing(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "API Key:"} {
+	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
@@ -55,9 +76,9 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		cfg.Provider.Model = "gpt-4o-mini"
 	})
 
-	configDir, err := config.ConfigDir()
+	configDir, err := config.Dir()
 	if err != nil {
-		t.Fatalf("ConfigDir(): %v", err)
+		t.Fatalf("Dir(): %v", err)
 	}
 	logPath := filepath.Join(configDir, "llm.log")
 	if err := os.WriteFile(logPath, []byte("log"), 0o600); err != nil {
@@ -70,7 +91,7 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "API Key:"} {
+	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
@@ -174,6 +195,314 @@ func TestPickModel_FetchErrors(t *testing.T) {
 				t.Fatalf("pickModel() error = %q, want wrapped fetch error", err.Error())
 			}
 		})
+	}
+}
+
+func TestRunStatus_OpenAIWithAPIKey(t *testing.T) {
+	saveCmdConfig(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderOpenAI
+		cfg.Provider.OpenAI.APIKey = "sk-status-openai-123456"
+		cfg.Provider.Model = "gpt-4o"
+	})
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Provider: openai") {
+		t.Fatalf("expected Provider: openai\n%s", out)
+	}
+	if !strings.Contains(out, "Model:    gpt-4o") {
+		t.Fatalf("expected Model: gpt-4o\n%s", out)
+	}
+}
+
+func TestRunSetModel_LoadError(t *testing.T) {
+	tempHome(t)
+
+	// Corrupt the config file
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runSetModel(nil, nil)
+	if err == nil {
+		t.Fatal("runSetModel() error = nil, want config load error")
+	}
+}
+
+func TestRunSetModel_LoadsConfigAndRunsWizard(t *testing.T) {
+	tempHome(t)
+
+	// Save a valid config
+	cfg := config.DefaultConfig()
+	cfg.Provider.OpenAI.APIKey = "sk-test-set-model"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	stubWizardHooks(t)
+	call := 0
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		switch call {
+		case 0: // provider
+			*(response.(*int)) = 0 // OpenAI
+		case 1: // model
+			*(response.(*int)) = 0
+		}
+		call++
+		return nil
+	}
+	wizardFetchOpenAIModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{{ID: "gpt-4o", Name: "gpt-4o", Company: "OpenAI"}}, nil
+	}
+	wizardSaveConfig = func(_ *config.Config) error {
+		return nil
+	}
+
+	if err := runSetModel(nil, nil); err != nil {
+		t.Fatalf("runSetModel() error: %v", err)
+	}
+}
+
+func TestPickModel_SelectCompanyError(t *testing.T) {
+	stubWizardHooks(t)
+	wizardFetchORModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{
+			{ID: "anthropic/claude-3.5-sonnet", Name: "Claude", Company: "Anthropic"},
+		}, nil
+	}
+	wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
+		return errors.New("user canceled company select")
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.OpenRouter.BaseURL = "https://example.test"
+	cfg.Provider.OpenRouter.APIKey = "sk-test"
+	_, err := pickModel(cfg, config.ProviderOpenRouter)
+	if err == nil {
+		t.Fatal("pickModel() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "user canceled company select") {
+		t.Fatalf("error = %q, want company select error", err.Error())
+	}
+}
+
+func TestPickModel_SelectModelError(t *testing.T) {
+	stubWizardHooks(t)
+	wizardFetchORModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{
+			{ID: "anthropic/claude-3.5-sonnet", Name: "Claude", Company: "Anthropic"},
+		}, nil
+	}
+	call := 0
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		if call == 0 {
+			*(response.(*int)) = 0 // company select
+			call++
+			return nil
+		}
+		return errors.New("user canceled model select")
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.OpenRouter.BaseURL = "https://example.test"
+	cfg.Provider.OpenRouter.APIKey = "sk-test"
+	_, err := pickModel(cfg, config.ProviderOpenRouter)
+	if err == nil {
+		t.Fatal("pickModel() error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "user canceled model select") {
+		t.Fatalf("error = %q, want model select error", err.Error())
+	}
+}
+
+func TestPickModel_OpenAISelectError(t *testing.T) {
+	stubWizardHooks(t)
+	wizardFetchOpenAIModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{{ID: "gpt-4o", Name: "gpt-4o", Company: "OpenAI"}}, nil
+	}
+	wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
+		return errors.New("canceled")
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.OpenAI.BaseURL = "https://example.test"
+	cfg.Provider.OpenAI.APIKey = "sk-test"
+	_, err := pickModel(cfg, config.ProviderOpenAI)
+	if err == nil {
+		t.Fatal("pickModel() error = nil, want error")
+	}
+}
+
+func TestRunStatus_LocalProvider_WithKey(t *testing.T) {
+	saveCmdConfig(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderLocal
+		cfg.Provider.Local.BaseURL = "http://localhost:11434/api/generate"
+		cfg.Provider.Local.APIKey = "local-secret-key-12345"
+		cfg.Provider.Model = "llama3"
+	})
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Provider: local") {
+		t.Fatalf("expected Provider: local\n%s", out)
+	}
+	if !strings.Contains(out, "Base URL:") {
+		t.Fatalf("expected Base URL for local provider\n%s", out)
+	}
+	if !strings.Contains(out, "API Key:") {
+		t.Fatalf("expected API Key shown\n%s", out)
+	}
+	// Should show masked key, not "not set"
+	if strings.Contains(out, "not set") {
+		t.Fatalf("expected masked key for local provider with key set\n%s", out)
+	}
+}
+
+func TestRunStatus_LocalProvider_NoKey(t *testing.T) {
+	saveCmdConfig(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderLocal
+		cfg.Provider.Local.BaseURL = "http://localhost:11434/api/generate"
+		cfg.Provider.Local.APIKey = ""
+		cfg.Provider.Model = "llama3"
+	})
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Provider: local") {
+		t.Fatalf("expected Provider: local\n%s", out)
+	}
+	if !strings.Contains(out, "optional for local") {
+		t.Fatalf("expected 'optional for local' message\n%s", out)
+	}
+}
+
+func TestEnsureAPIKey_LocalProvider(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if err := ensureAPIKey(cfg, config.ProviderLocal); err != nil {
+		t.Fatalf("ensureAPIKey(local) error: %v", err)
+	}
+}
+
+func TestPickProvider_Local(t *testing.T) {
+	stubWizardHooks(t)
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		*(response.(*int)) = 2 // Local
+		return nil
+	}
+
+	got, err := pickProvider()
+	if err != nil {
+		t.Fatalf("pickProvider() error = %v", err)
+	}
+	if got != config.ProviderLocal {
+		t.Fatalf("pickProvider() = %q, want %q", got, config.ProviderLocal)
+	}
+}
+
+func TestPickModel_LocalProvider(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{
+			{ID: "llama3:latest", Name: "llama3:latest", Company: "Local"},
+			{ID: "codellama:7b", Name: "codellama:7b", Company: "Local"},
+		}, nil
+	}
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		*(response.(*int)) = 1
+		return nil
+	}
+
+	cfg := config.DefaultConfig()
+	got, err := pickModel(cfg, config.ProviderLocal)
+	if err != nil {
+		t.Fatalf("pickModel(local) error = %v", err)
+	}
+	if got != "codellama:7b" {
+		t.Fatalf("pickModel(local) = %q, want %q", got, "codellama:7b")
+	}
+}
+
+func TestPickModel_LocalFetchError(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return nil, errors.New("connection refused")
+	}
+
+	cfg := config.DefaultConfig()
+	_, err := pickModel(cfg, config.ProviderLocal)
+	if err == nil {
+		t.Fatal("pickModel(local) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "fetch models") {
+		t.Fatalf("error = %q, want fetch models error", err.Error())
+	}
+}
+
+func TestPickModel_LocalNoModels(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{}, nil
+	}
+
+	cfg := config.DefaultConfig()
+	_, err := pickModel(cfg, config.ProviderLocal)
+	if err == nil {
+		t.Fatal("pickModel(local) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "no models available") {
+		t.Fatalf("error = %q, want no models error", err.Error())
+	}
+}
+
+func TestPickModel_LocalSelectError(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{{ID: "llama3", Name: "llama3", Company: "Local"}}, nil
+	}
+	wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
+		return errors.New("user canceled")
+	}
+
+	cfg := config.DefaultConfig()
+	_, err := pickModel(cfg, config.ProviderLocal)
+	if err == nil {
+		t.Fatal("pickModel(local) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "user canceled") {
+		t.Fatalf("error = %q, want user canceled", err.Error())
 	}
 }
 

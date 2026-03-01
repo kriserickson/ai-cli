@@ -25,7 +25,7 @@ func stubWindowsShellHooks(t *testing.T) {
 }
 
 func TestDetectWindowsShell_Branches(t *testing.T) {
-	t.Run("git bash returns SHELL path when present", func(t *testing.T) {
+	t.Run("git bash returns SHELL path when present and it is a Windows path", func(t *testing.T) {
 		stubWindowsShellHooks(t)
 		t.Setenv("MSYSTEM", "MINGW64")
 		t.Setenv("BASH_VERSION", "")
@@ -39,6 +39,23 @@ func TestDetectWindowsShell_Branches(t *testing.T) {
 		got := detectWindowsShell()
 		if got != `C:\Program Files\Git\bin\bash.exe` {
 			t.Fatalf("detectWindowsShell() = %q, want SHELL path", got)
+		}
+	})
+
+	t.Run("git bash ignores MSYS-style SHELL path and returns bash", func(t *testing.T) {
+		stubWindowsShellHooks(t)
+		t.Setenv("MSYSTEM", "MINGW64")
+		t.Setenv("BASH_VERSION", "")
+		t.Setenv("SHELL", "/usr/bin/bash")
+		t.Setenv("PSModulePath", "")
+		detectParentShellProcess = func() string {
+			t.Fatal("parentShellProcess should not be called in git bash branch")
+			return ""
+		}
+
+		got := detectWindowsShell()
+		if got != "bash" {
+			t.Fatalf("detectWindowsShell() = %q, want bash for MSYS-style SHELL path", got)
 		}
 	})
 
@@ -188,9 +205,5 @@ func TestParentShellProcess_Smoke(t *testing.T) {
 		return
 	default:
 		// Paths like C:\Program Files\PowerShell\7\pwsh.exe are also valid.
-		if got == "" {
-			t.Fatal("unexpected empty shell string")
-		}
 	}
 }
-

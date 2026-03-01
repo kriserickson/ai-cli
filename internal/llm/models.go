@@ -65,9 +65,10 @@ func FetchOpenRouterModels(baseURL, apiKey string) ([]ModelInfo, error) {
 		return nil, fmt.Errorf("decode OpenRouter models: %w", err)
 	}
 
+	const otherCompany = "Other"
 	models := make([]ModelInfo, 0, len(or.Data))
 	for _, m := range or.Data {
-		company := "Other"
+		company := otherCompany
 		if idx := strings.Index(m.ID, "/"); idx >= 0 {
 			prefix := m.ID[:idx]
 			if prefix != "" {
