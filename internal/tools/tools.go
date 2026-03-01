@@ -253,17 +253,12 @@ func execCheckCommand(command string) (string, error) {
 		return "", errors.New("check_command requires a command argument")
 	}
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", fmt.Sprintf("Get-Command '%s'", command))
-	} else {
-		cmd = exec.CommandContext(context.Background(), "which", command)
-	}
-	out, _ := cmd.CombinedOutput()
-	if len(out) == 0 {
+	path, err := exec.LookPath(command)
+	if err != nil {
 		return command + ": not found", nil
 	}
-	return strings.TrimSpace(string(out)), nil
+
+	return path, nil
 }
 
 func execDiskUsage() (string, error) {
