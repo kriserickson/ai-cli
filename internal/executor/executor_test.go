@@ -131,12 +131,13 @@ func TestRunExecutesSafeCommandWithoutConfirmation(t *testing.T) {
 
 func TestRunWithExplainTrue(t *testing.T) {
 	cfg := defaultSafetyCfg()
+	const explanationText = "Unique explanation string that only appears in the explanation output."
 	cmds := []llm.Command{{
-		Command:     "echo explain-test",
+		Command:     "echo hello",
 		Description: "echo with explanation",
 		Risk:        "safe",
 		Certainty:   100,
-		Explanation: "Prints the text 'explain-test' to stdout.",
+		Explanation: explanationText,
 	}}
 
 	// Capture stdout to verify explanation is printed
@@ -160,7 +161,7 @@ func TestRunWithExplainTrue(t *testing.T) {
 		t.Fatalf("Run() error = %v, want nil", runErr)
 	}
 	output := buf.String()
-	if !strings.Contains(output, "explain-test") {
+	if !strings.Contains(output, explanationText) {
 		t.Errorf("output missing explanation text:\n%s", output)
 	}
 }
