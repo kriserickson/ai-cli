@@ -51,7 +51,7 @@ type SafetyConfig struct {
 	WhitelistPrefixes []string `toml:"whitelist_prefixes,omitempty"` // Deprecated: use allowlist_prefixes
 }
 
-// ValidToolCallingModes returns true if the given mode is a valid tool_calling value.
+// ValidToolCallingMode returns true if the given mode is a valid tool_calling value.
 func ValidToolCallingMode(mode string) bool {
 	switch mode {
 	case ToolCallingNever, ToolCallingAlwaysPrompt, ToolCallingDangerousPrompt, ToolCallingAlwaysAllow:

@@ -119,16 +119,37 @@ func TestExecListDirectory_DefaultPath(t *testing.T) {
 	}
 }
 
-func TestExecListDirectory_CommandFailure(t *testing.T) {
-	if runtime.GOOS == windowsOS {
-		t.Skip("PATH-based command stubs are Unix-specific")
+func TestExecListDirectory_BlockedEntriesFiltered(t *testing.T) {
+	dir := t.TempDir()
+	// Create a safe file and several blocked files/dirs
+	for _, name := range []string{"visible.txt", ".env", "secret.key", "id_rsa"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte("x"), 0o644); err != nil {
+			t.Fatalf("os.WriteFile(%s): %v", name, err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".ssh"), 0o700); err != nil {
+		t.Fatalf("os.MkdirAll(.ssh): %v", err)
 	}
 
-	dir := t.TempDir()
-	writeFakeCommand(t, dir, "ls", "#!/bin/sh\nexit 1\n")
-	t.Setenv("PATH", dir)
+	output, err := execListDirectory("", dir)
+	if err != nil {
+		t.Fatalf("execListDirectory: %v", err)
+	}
+	if !strings.Contains(output, "visible.txt") {
+		t.Errorf("output should contain visible.txt, got: %s", output)
+	}
+	for _, blocked := range []string{".env", "secret.key", "id_rsa", ".ssh"} {
+		if strings.Contains(output, blocked) {
+			t.Errorf("output should not contain blocked entry %q, got: %s", blocked, output)
+		}
+	}
+}
 
-	_, err := execListDirectory(".", dir)
+func TestExecListDirectory_CommandFailure(t *testing.T) {
+	dir := t.TempDir()
+	nonExistent := filepath.Join(dir, "does_not_exist")
+
+	_, err := execListDirectory(nonExistent, dir)
 	if err == nil {
 		t.Fatal("execListDirectory() error = nil, want error")
 	}
@@ -268,6 +289,17 @@ func TestExecListMemories_ParseError(t *testing.T) {
 }
 
 func TestExecute_ProcessAndNetworkTools(t *testing.T) {
+	if runtime.GOOS == windowsOS {
+		t.Skip("PATH-based command stubs are Unix-specific")
+	}
+
+	dir := t.TempDir()
+	writeFakeCommand(t, dir, "ps", "#!/bin/sh\necho 'fake process list'\n")
+	writeFakeCommand(t, dir, "top", "#!/bin/sh\necho 'fake system resources'\n")
+	writeFakeCommand(t, dir, "netstat", "#!/bin/sh\necho 'fake network connections'\n")
+	writeFakeCommand(t, dir, "ping", "#!/bin/sh\necho 'fake ping output'\n")
+	t.Setenv("PATH", dir)
+
 	tests := []struct {
 		name string
 		tool string
@@ -282,10 +314,10 @@ func TestExecute_ProcessAndNetworkTools(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, err := Execute(tt.tool, tt.args, shell.Info{})
-			if err != nil && output != "" {
-				t.Fatalf("Execute(%s) returned both output and error: %v", tt.tool, err)
+			if err != nil {
+				t.Fatalf("Execute(%s) error: %v", tt.tool, err)
 			}
-			if err == nil && output == "" {
+			if output == "" {
 				t.Fatalf("Execute(%s) returned empty output", tt.tool)
 			}
 		})
