@@ -64,6 +64,7 @@ This system uses BSD userland, NOT GNU coreutils. You MUST use BSD-compatible fl
 - tar: macOS ships bsdtar, NOT GNU tar. Do NOT use "--wildcards" or other GNU-specific flags.
 - find: "find -printf" is NOT available (GNU-only). Use "-print0 | xargs -0" or "-exec" instead.
 - awk: macOS ships BSD awk, NOT gawk. Do NOT use gawk features like "--csv" or "BEGINFILE/ENDFILE".
+- To update ai-cli via Homebrew: "brew upgrade ai-cli" (or "brew upgrade kriserickson/tap/ai-cli" if needed).
 `
 
 const linuxHints = `
@@ -73,6 +74,8 @@ This system uses GNU coreutils. Prefer GNU-specific flags when they are clearer:
 - sed: use "sed -i" for in-place editing (no extra argument needed unlike BSD sed).
 - date: GNU date supports "date -d" for date arithmetic.
 - grep: "grep -P" (PCRE) is available for advanced patterns.
+- To update ai-cli: download the latest release from GitHub using curl. Example:
+  VERSION=$(curl -s https://api.github.com/repos/kriserickson/ai-cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4) && ARCH=$(uname -m | sed 's/x86_64/amd64/') && curl -LO "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-linux-${ARCH}.tar.gz" && tar -xzf "ai-${VERSION}-linux-${ARCH}.tar.gz" && chmod +x ai && sudo mv ai /usr/local/bin/ai
 `
 
 const windowsHints = `
@@ -80,6 +83,11 @@ Platform-specific rules (Windows):
 - Use PowerShell cmdlets when the shell is powershell or pwsh.
 - For cmd.exe, use standard Windows commands (dir, type, tasklist, etc.).
 - Do NOT use Unix commands unless running under WSL or Git Bash.
+- To update ai-cli:
+  - If the shell is powershell or pwsh:
+    $VERSION = (Invoke-RestMethod "https://api.github.com/repos/kriserickson/ai-cli/releases/latest").tag_name; Invoke-WebRequest -Uri "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-windows-amd64.zip" -OutFile "ai-${VERSION}-windows-amd64.zip"; Expand-Archive -Path "ai-${VERSION}-windows-amd64.zip" -DestinationPath .\ai-update -Force; Move-Item .\ai-update\ai.exe (Get-Command ai).Source -Force; Remove-Item "ai-${VERSION}-windows-amd64.zip"; Remove-Item .\ai-update -Recurse
+  - If the shell is bash (Git Bash/MSYS2):
+    VERSION=$(curl -s https://api.github.com/repos/kriserickson/ai-cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4) && curl -LO "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-windows-amd64.zip" && unzip -o "ai-${VERSION}-windows-amd64.zip" -d ai-update && mv ai-update/ai.exe "$(which ai)" && rm -rf "ai-${VERSION}-windows-amd64.zip" ai-update
 `
 
 const toolInstructions = `You have access to read-only tools to gather information before generating commands.
