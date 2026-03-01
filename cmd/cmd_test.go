@@ -82,10 +82,6 @@ func TestGetConfigValue(t *testing.T) {
 		{"provider", "openrouter"},
 		{"default", "openrouter"},
 		{"model", "anthropic/claude-3.5-sonnet"},
-		{"openai_key", "sk-l...1234"},
-		{"openrouter_key", "****"},
-		{"openai_url", "https://api.openai.com/v1"},
-		{"openrouter_url", "https://openrouter.ai/api/v1"},
 		{"always_confirm", "false"},
 		{"min_certainty", "80"},
 		{"allowlist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
@@ -100,6 +96,87 @@ func TestGetConfigValue(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("getConfigValue(%q) = %q, want %q", tt.key, got, tt.want)
 		}
+	}
+}
+
+// --- llm_key / llm_url (current-provider aliases) ---
+
+func TestGetConfigValue_LlmKey(t *testing.T) {
+	cfg := config.DefaultConfig() // default provider is openrouter
+	cfg.Provider.OpenRouter.APIKey = "sk-or-longkey1234"
+
+	got, err := getConfigValue(cfg, "llm_key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != maskKey("sk-or-longkey1234") {
+		t.Errorf("llm_key = %q, want %q", got, maskKey("sk-or-longkey1234"))
+	}
+
+	// Switch provider to openai
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.OpenAI.APIKey = "sk-openai-longkey1234"
+	got, err = getConfigValue(cfg, "llm_key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != maskKey("sk-openai-longkey1234") {
+		t.Errorf("llm_key (openai) = %q, want %q", got, maskKey("sk-openai-longkey1234"))
+	}
+}
+
+func TestGetConfigValue_LlmUrl(t *testing.T) {
+	cfg := config.DefaultConfig() // default provider is openrouter
+	got, err := getConfigValue(cfg, "llm_url")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != cfg.Provider.OpenRouter.BaseURL {
+		t.Errorf("llm_url = %q, want %q", got, cfg.Provider.OpenRouter.BaseURL)
+	}
+}
+
+func TestSetConfigValue_LlmKey(t *testing.T) {
+	cfg := config.DefaultConfig() // default provider is openrouter
+	if err := setConfigValue(cfg, "llm_key", "sk-new-key"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider.OpenRouter.APIKey != "sk-new-key" {
+		t.Errorf("OpenRouter.APIKey = %q, want %q", cfg.Provider.OpenRouter.APIKey, "sk-new-key")
+	}
+
+	// Switch to openai and set again
+	cfg.Provider.Default = config.ProviderOpenAI
+	if err := setConfigValue(cfg, "llm_key", "sk-openai-new"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider.OpenAI.APIKey != "sk-openai-new" {
+		t.Errorf("OpenAI.APIKey = %q, want %q", cfg.Provider.OpenAI.APIKey, "sk-openai-new")
+	}
+}
+
+func TestSetConfigValue_LlmUrl(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if err := setConfigValue(cfg, "llm_url", "https://custom.example.com"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider.OpenRouter.BaseURL != "https://custom.example.com" {
+		t.Errorf("OpenRouter.BaseURL = %q, want %q", cfg.Provider.OpenRouter.BaseURL, "https://custom.example.com")
+	}
+}
+
+func TestCurrentProviderDetail_Local(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderLocal
+	cfg.Provider.Local.APIKey = "local-test-key"
+	cfg.Provider.Local.BaseURL = "http://localhost:11434"
+
+	pd := currentProviderDetail(cfg)
+	if pd.APIKey != "local-test-key" {
+		t.Errorf("local APIKey = %q, want %q", pd.APIKey, "local-test-key")
+	}
+	if pd.BaseURL != "http://localhost:11434" {
+		t.Errorf("local BaseURL = %q, want %q", pd.BaseURL, "http://localhost:11434")
 	}
 }
 
@@ -121,10 +198,6 @@ func TestSetConfigValue(t *testing.T) {
 		{"provider", "openai", func(c *config.Config) bool { return c.Provider.Default == "openai" }},
 		{"default", "openai", func(c *config.Config) bool { return c.Provider.Default == "openai" }},
 		{"model", "gpt-4o", func(c *config.Config) bool { return c.Provider.Model == "gpt-4o" }},
-		{"openai_key", "sk-abc", func(c *config.Config) bool { return c.Provider.OpenAI.APIKey == "sk-abc" }},
-		{"openrouter_key", "sk-or-abc", func(c *config.Config) bool { return c.Provider.OpenRouter.APIKey == "sk-or-abc" }},
-		{"openai_url", "https://proxy.example.com", func(c *config.Config) bool { return c.Provider.OpenAI.BaseURL == "https://proxy.example.com" }},
-		{"openrouter_url", "https://proxy.example.com", func(c *config.Config) bool { return c.Provider.OpenRouter.BaseURL == "https://proxy.example.com" }},
 		{"always_confirm", "true", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
 		{"always_confirm", "false", func(c *config.Config) bool { return !c.Safety.AlwaysConfirm }},
 		{"always_confirm", "TRUE", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
@@ -332,8 +405,8 @@ func TestConfigSetCompletion(t *testing.T) {
 	if dir != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive = %v, want NoFileComp", dir)
 	}
-	if len(completions) != 2 {
-		t.Errorf("expected 2 provider completions, got %d", len(completions))
+	if len(completions) != 3 {
+		t.Errorf("expected 3 provider completions, got %d", len(completions))
 	}
 
 	// One arg "model": no fixed values
@@ -426,15 +499,15 @@ func TestConfigSet_MinCertainty(t *testing.T) {
 func TestConfigSet_URLs(t *testing.T) {
 	tempHome(t)
 
-	if _, err := runCmd(t, "config", "set", "openai_url", "https://proxy.example.com/v1"); err != nil {
-		t.Fatalf("config set openai_url: %v", err)
+	if _, err := runCmd(t, "config", "set", "llm_url", "https://proxy.example.com/v1"); err != nil {
+		t.Fatalf("config set llm_url: %v", err)
 	}
-	out, err := runCmd(t, "config", "get", "openai_url")
+	out, err := runCmd(t, "config", "get", "llm_url")
 	if err != nil {
-		t.Fatalf("config get openai_url: %v", err)
+		t.Fatalf("config get llm_url: %v", err)
 	}
 	if !strings.Contains(out, "https://proxy.example.com/v1") {
-		t.Errorf("openai_url = %q", strings.TrimSpace(out))
+		t.Errorf("llm_url = %q", strings.TrimSpace(out))
 	}
 }
 
@@ -490,6 +563,55 @@ func TestConfigSet_LoadError(t *testing.T) {
 	_, err := runCmd(t, "config", "set", "model", "gpt-4o")
 	if err == nil {
 		t.Error("expected error for invalid config, got nil")
+	}
+}
+
+// --- memory commands ---
+
+func TestMemoryAddListRemove(t *testing.T) {
+	tempHome(t)
+
+	// Add a memory
+	if _, err := runCmd(t, "memory", "add", "docker", "always use docker compose v2"); err != nil {
+		t.Fatalf("memory add: %v", err)
+	}
+
+	// List memories
+	out, err := runCmd(t, "memory", "list")
+	if err != nil {
+		t.Fatalf("memory list: %v", err)
+	}
+	if !strings.Contains(out, "docker") {
+		t.Errorf("memory list output missing 'docker'\n%s", out)
+	}
+	if !strings.Contains(out, "always use docker compose v2") {
+		t.Errorf("memory list output missing content\n%s", out)
+	}
+
+	// Remove the memory
+	if _, err := runCmd(t, "memory", "remove", "docker"); err != nil {
+		t.Fatalf("memory remove: %v", err)
+	}
+
+	// List should now be empty
+	out, err = runCmd(t, "memory", "list")
+	if err != nil {
+		t.Fatalf("memory list after remove: %v", err)
+	}
+	if !strings.Contains(out, "No memories stored") {
+		t.Errorf("expected 'No memories stored' after remove\n%s", out)
+	}
+}
+
+func TestMemoryListEmpty(t *testing.T) {
+	tempHome(t)
+
+	out, err := runCmd(t, "memory", "list")
+	if err != nil {
+		t.Fatalf("memory list: %v", err)
+	}
+	if !strings.Contains(out, "No memories stored") {
+		t.Errorf("expected 'No memories stored'\n%s", out)
 	}
 }
 

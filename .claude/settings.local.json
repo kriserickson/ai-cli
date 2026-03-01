@@ -6,7 +6,9 @@
       "Bash(./ai.exe status:*)",
       "Bash(./ai.exe:*)",
       "Bash(go get:*)",
-      "Bash(go tool cover -func=coverage.out 2>&1)"
+      "Bash(go tool cover -func=coverage.out 2>&1)",
+      "Bash(echo done:*)",
+      "Bash(go:*)"
     ]
   }
 }

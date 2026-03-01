@@ -119,6 +119,53 @@ func TestBuildSystemPrompt_WindowsPlatformHints(t *testing.T) {
 	}
 }
 
+// --- AppendMemories ---
+
+func TestAppendMemories_Empty(t *testing.T) {
+	prompt := "base prompt"
+	result := AppendMemories(prompt, nil)
+	if result != prompt {
+		t.Errorf("AppendMemories with nil = %q, want original prompt", result)
+	}
+
+	result = AppendMemories(prompt, []MemoryContext{})
+	if result != prompt {
+		t.Errorf("AppendMemories with empty = %q, want original prompt", result)
+	}
+}
+
+func TestAppendMemories_SingleMemory(t *testing.T) {
+	prompt := "system prompt"
+	memories := []MemoryContext{
+		{Keyword: "docker", Content: "use docker compose v2"},
+	}
+	result := AppendMemories(prompt, memories)
+	if !strings.Contains(result, "system prompt") {
+		t.Error("result missing original prompt")
+	}
+	if !strings.Contains(result, "User-defined context") {
+		t.Error("result missing context header")
+	}
+	if !strings.Contains(result, `"docker": use docker compose v2`) {
+		t.Error("result missing memory content")
+	}
+}
+
+func TestAppendMemories_MultipleMemories(t *testing.T) {
+	prompt := "base"
+	memories := []MemoryContext{
+		{Keyword: "git", Content: "always use --no-ff for merges"},
+		{Keyword: "python", Content: "prefer python3"},
+	}
+	result := AppendMemories(prompt, memories)
+	if !strings.Contains(result, `"git"`) {
+		t.Error("result missing git memory")
+	}
+	if !strings.Contains(result, `"python"`) {
+		t.Error("result missing python memory")
+	}
+}
+
 func TestBuildSystemPrompt_UnknownOSNoPlatformHints(t *testing.T) {
 	prompt := BuildSystemPrompt("freebsd/amd64", "/bin/sh", "sh 1.0", "/home/test")
 

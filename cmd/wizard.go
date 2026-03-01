@@ -14,6 +14,7 @@ var (
 	wizardAskOne            = survey.AskOne
 	wizardFetchOpenAIModels = llm.FetchOpenAIModels
 	wizardFetchORModels     = llm.FetchOpenRouterModels
+	wizardFetchLocalModels  = llm.FetchLocalModels
 	wizardSaveConfig        = config.Save
 )
 
@@ -34,14 +35,18 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider() (string, error) {
-	idx, err := selectFromList("Select a provider:", []string{"OpenAI", "OpenRouter"})
+	idx, err := selectFromList("Select a provider:", []string{"OpenAI", "OpenRouter", "Local"})
 	if err != nil {
 		return "", err
 	}
-	if idx == 0 {
+	switch idx {
+	case 0:
 		return config.ProviderOpenAI, nil
+	case 1:
+		return config.ProviderOpenRouter, nil
+	default:
+		return config.ProviderLocal, nil
 	}
-	return config.ProviderOpenRouter, nil
 }
 
 func promptAPIKey(provider string) (string, error) {
@@ -55,7 +60,23 @@ func promptAPIKey(provider string) (string, error) {
 	return key, nil
 }
 
+func promptLocalBaseURL(current string) (string, error) {
+	var url string
+	err := wizardAskOne(&survey.Input{
+		Message: "Local server base URL:",
+		Default: current,
+	}, &url, survey.WithValidator(survey.Required))
+	if err != nil {
+		return "", err
+	}
+	return url, nil
+}
+
 func ensureAPIKey(cfg *config.Config, provider string) error {
+	if provider == config.ProviderLocal {
+		// API key is optional for local providers
+		return nil
+	}
 	var existing string
 	switch provider {
 	case config.ProviderOpenAI:
@@ -133,6 +154,26 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 		}
 		return models[idx].ID, nil
 
+	case config.ProviderLocal:
+		baseURL := cfg.Provider.Local.BaseURL
+		fmt.Println("Fetching available models from local server...")
+		models, err := wizardFetchLocalModels(baseURL)
+		if err != nil {
+			return "", fmt.Errorf("fetch models: %w", err)
+		}
+		if len(models) == 0 {
+			return "", errors.New("no models available on local server")
+		}
+		modelNames := make([]string, len(models))
+		for i, m := range models {
+			modelNames[i] = m.Name
+		}
+		idx, err := selectFromList("Select a model:", modelNames)
+		if err != nil {
+			return "", err
+		}
+		return models[idx].ID, nil
+
 	default:
 		return "", fmt.Errorf("unknown provider: %s", provider)
 	}
@@ -148,6 +189,14 @@ func RunModelWizard(cfg *config.Config) error {
 
 	if err := ensureAPIKey(cfg, provider); err != nil {
 		return err
+	}
+
+	if provider == config.ProviderLocal {
+		url, err := promptLocalBaseURL(cfg.Provider.Local.BaseURL)
+		if err != nil {
+			return err
+		}
+		cfg.Provider.Local.BaseURL = url
 	}
 
 	model, err := pickModel(cfg, provider)

@@ -121,6 +121,58 @@ func FetchOpenAIModels(baseURL, apiKey string) ([]ModelInfo, error) {
 	return models, nil
 }
 
+type ollamaTagsResponse struct {
+	Models []ollamaModelEntry `json:"models"`
+}
+
+type ollamaModelEntry struct {
+	Name string `json:"name"`
+}
+
+// FetchLocalModels fetches available models from an Ollama-compatible local server.
+// The baseURL should point to the /api/generate endpoint; this function derives the
+// /api/tags endpoint from it.
+func FetchLocalModels(baseURL string) ([]ModelInfo, error) {
+	// Derive tags URL from base URL (e.g. http://localhost:11434/api/generate -> http://localhost:11434/api/tags)
+	tagsURL := strings.TrimRight(baseURL, "/")
+	if strings.HasSuffix(tagsURL, "/api/generate") {
+		tagsURL = tagsURL[:len(tagsURL)-len("/api/generate")] + "/api/tags"
+	} else {
+		// Best effort: replace last path segment
+		if idx := strings.LastIndex(tagsURL, "/"); idx >= 0 {
+			tagsURL = tagsURL[:idx] + "/tags"
+		}
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	req, err := http.NewRequestWithContext(context.Background(), "GET", tagsURL, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("create local models request: %w", err)
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("fetch local models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("local models API error (%d): %s", resp.StatusCode, string(body))
+	}
+
+	var tagsResp ollamaTagsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&tagsResp); err != nil {
+		return nil, fmt.Errorf("decode local models: %w", err)
+	}
+
+	models := make([]ModelInfo, 0, len(tagsResp.Models))
+	for _, m := range tagsResp.Models {
+		models = append(models, ModelInfo{ID: m.Name, Name: m.Name, Company: "Local"})
+	}
+	return models, nil
+}
+
 func GroupByCompany(models []ModelInfo) []ModelGroup {
 	if len(models) == 0 {
 		return nil

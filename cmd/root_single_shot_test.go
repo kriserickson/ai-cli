@@ -3,6 +3,8 @@ package cmd
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -99,6 +101,32 @@ func TestRunRootSingleShot_WithDebugFlag(t *testing.T) {
 	defer func() { debugFlag = "" }()
 
 	if err := runRoot(nil, []string{"say", "hello"}); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+}
+
+func TestRunRootSingleShot_WithMemories(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"commands\",\"commands\":[]}"}}]}`))
+	}))
+	defer server.Close()
+
+	saveRootConfig(t, server.URL)
+
+	// Add a memory to test the injection path
+	home, _ := os.UserHomeDir()
+	memDir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "memories.json"), []byte(`[{"keyword":"docker","content":"use docker compose v2"}]`), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	debugFlag = ""
+	// Use a query containing the keyword to trigger memory matching
+	if err := runRoot(nil, []string{"run", "docker", "compose"}); err != nil {
 		t.Fatalf("runRoot() error: %v", err)
 	}
 }

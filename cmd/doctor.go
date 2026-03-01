@@ -54,23 +54,37 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	printCheck("Config file", true, configPath)
 
 	// Check 2: API key for current provider
-	var apiKey string
-	switch cfg.Provider.Default {
-	case config.ProviderOpenAI:
-		apiKey = cfg.Provider.OpenAI.APIKey
-	case config.ProviderOpenRouter:
-		apiKey = cfg.Provider.OpenRouter.APIKey
-	}
-
-	if apiKey == "" {
-		allPassed = false
-		printCheck("API key", false, "No API key configured for "+cfg.Provider.Default)
-		fmt.Println("    Running setup wizard...")
-		if err := RunModelWizard(cfg); err != nil {
-			return err
+	if cfg.Provider.Default == config.ProviderLocal {
+		baseURL := cfg.Provider.Local.BaseURL
+		if baseURL != "" {
+			printCheck("Local server", true, fmt.Sprintf("URL: %s", baseURL))
+		} else {
+			allPassed = false
+			printCheck("Local server", false, "No base URL configured for local provider")
+			fmt.Println("    Running setup wizard...")
+			if err := RunModelWizard(cfg); err != nil {
+				return err
+			}
 		}
 	} else {
-		printCheck("API key", true, fmt.Sprintf("%s (%s)", cfg.Provider.Default, maskKey(apiKey)))
+		var apiKey string
+		switch cfg.Provider.Default {
+		case config.ProviderOpenAI:
+			apiKey = cfg.Provider.OpenAI.APIKey
+		case config.ProviderOpenRouter:
+			apiKey = cfg.Provider.OpenRouter.APIKey
+		}
+
+		if apiKey == "" {
+			allPassed = false
+			printCheck("API key", false, fmt.Sprintf("No API key configured for %s", cfg.Provider.Default))
+			fmt.Println("    Running setup wizard...")
+			if err := RunModelWizard(cfg); err != nil {
+				return err
+			}
+		} else {
+			printCheck("API key", true, fmt.Sprintf("%s (%s)", cfg.Provider.Default, maskKey(apiKey)))
+		}
 	}
 
 	// Check 3: Model is set — always ✓ (default exists)

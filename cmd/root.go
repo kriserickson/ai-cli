@@ -22,6 +22,9 @@ const windows = "windows"
 
 var debugFlag string
 
+// interactiveRun is the entry point for interactive mode, stubbable for testing.
+var interactiveRun = interactive.Run
+
 var rootCmd = &cobra.Command{
 	Use:                "ai [instruction]",
 	Short:              "Translate natural language into shell commands using AI",
@@ -158,7 +161,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 				return nil
 			},
 		}
-		return interactive.Run(Version, cmds, cfg, client, shellInfo)
+		return interactiveRun(Version, cmds, cfg, client, shellInfo)
 	}
 
 	// Single-shot mode

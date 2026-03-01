@@ -11,6 +11,7 @@ import (
 const (
 	ProviderOpenAI     = "openai"
 	ProviderOpenRouter = "openrouter"
+	ProviderLocal      = "local"
 
 	DebugNone   = "none"
 	DebugScreen = "screen"
@@ -28,6 +29,7 @@ type ProviderConfig struct {
 	Model      string         `toml:"model"`
 	OpenAI     ProviderDetail `toml:"openai"`
 	OpenRouter ProviderDetail `toml:"openrouter"`
+	Local      ProviderDetail `toml:"local"`
 }
 
 type ProviderDetail struct {
@@ -52,6 +54,9 @@ func DefaultConfig() *Config {
 			},
 			OpenRouter: ProviderDetail{
 				BaseURL: "https://openrouter.ai/api/v1",
+			},
+			Local: ProviderDetail{
+				BaseURL: "http://localhost:11434/api/generate",
 			},
 		},
 		Safety: SafetyConfig{

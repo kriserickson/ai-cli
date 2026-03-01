@@ -383,6 +383,55 @@ func TestParseBool(t *testing.T) {
 	}
 }
 
+func TestLoad_SaveFailOnCreate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based test not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	// Make the home directory read-only so that when Load tries to
+	// Save the default config (because config.toml doesn't exist),
+	// MkdirAll for .ai-cli fails.
+	if err := os.Chmod(tmpDir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(tmpDir, 0o700) })
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when Save fails during default config creation")
+	}
+}
+
+func TestSave_WriteFileError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based test not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	// Create the directory but make it read-only so WriteFile fails
+	dir := filepath.Join(tmpDir, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+
+	cfg := DefaultConfig()
+	err := Save(cfg)
+	if err == nil {
+		t.Fatal("expected error when directory is read-only")
+	}
+}
+
 func TestTOMLRoundTrip(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Provider.OpenAI.APIKey = "test-key"

@@ -57,18 +57,27 @@ func runStatus(_ *cobra.Command, _ []string) error {
 	shellInfo := shell.Detect()
 	fmt.Printf("Shell:    %s  (%s)\n", shellInfo.Shell, shellInfo.Version)
 
-	var apiKey string
-	switch cfg.Provider.Default {
-	case config.ProviderOpenAI:
-		apiKey = cfg.Provider.OpenAI.APIKey
-	case config.ProviderOpenRouter:
-		apiKey = cfg.Provider.OpenRouter.APIKey
-	}
-
-	if apiKey == "" {
-		fmt.Printf("API Key:  %s\n", color.RedString("not set"))
+	if cfg.Provider.Default == config.ProviderLocal {
+		fmt.Printf("Base URL: %s\n", cfg.Provider.Local.BaseURL)
+		if cfg.Provider.Local.APIKey != "" {
+			fmt.Printf("API Key:  %s\n", color.GreenString(maskKey(cfg.Provider.Local.APIKey)))
+		} else {
+			fmt.Printf("API Key:  %s\n", color.YellowString("not set (optional for local)"))
+		}
 	} else {
-		fmt.Printf("API Key:  %s\n", color.GreenString(maskKey(apiKey)))
+		var apiKey string
+		switch cfg.Provider.Default {
+		case config.ProviderOpenAI:
+			apiKey = cfg.Provider.OpenAI.APIKey
+		case config.ProviderOpenRouter:
+			apiKey = cfg.Provider.OpenRouter.APIKey
+		}
+
+		if apiKey == "" {
+			fmt.Printf("API Key:  %s\n", color.RedString("not set"))
+		} else {
+			fmt.Printf("API Key:  %s\n", color.GreenString(maskKey(apiKey)))
+		}
 	}
 
 	return nil

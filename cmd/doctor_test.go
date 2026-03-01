@@ -272,6 +272,68 @@ func TestRunDoctor_LoadError(t *testing.T) {
 	})
 }
 
+func TestRunDoctor_LocalProviderWithBaseURL(t *testing.T) {
+	writeConfigForDoctor(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderLocal
+		cfg.Provider.Local.BaseURL = "http://localhost:11434/api/generate"
+		cfg.Provider.Model = "llama3"
+	})
+	t.Setenv("SHELL", "")
+
+	out := captureStdout(t, func() {
+		if err := runDoctor(nil, nil); err != nil {
+			t.Fatalf("runDoctor() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Local server") {
+		t.Fatalf("runDoctor output should mention Local server\n%s", out)
+	}
+	if !strings.Contains(out, "All checks passed!") {
+		t.Fatalf("runDoctor output missing 'All checks passed!'\n%s", out)
+	}
+}
+
+func TestRunDoctor_LocalProviderNoBaseURL(t *testing.T) {
+	writeConfigForDoctor(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderLocal
+		cfg.Provider.Local.BaseURL = ""
+		cfg.Provider.Model = "llama3"
+	})
+	t.Setenv("SHELL", "")
+
+	stubWizardHooks(t)
+	call := 0
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		switch call {
+		case 0: // provider
+			*(response.(*int)) = 0 // OpenAI
+		case 1: // API key prompt
+			*(response.(*string)) = "sk-wizard-key"
+		case 2: // model
+			*(response.(*int)) = 0
+		}
+		call++
+		return nil
+	}
+	wizardFetchOpenAIModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{{ID: "gpt-4o", Name: "gpt-4o", Company: "OpenAI"}}, nil
+	}
+	wizardSaveConfig = func(_ *config.Config) error {
+		return nil
+	}
+
+	out := captureStdout(t, func() {
+		if err := runDoctor(nil, nil); err != nil {
+			t.Fatalf("runDoctor() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "No base URL") {
+		t.Fatalf("runDoctor output should mention missing base URL\n%s", out)
+	}
+}
+
 func TestRunDoctorSkipsNoglobCheckOnWindows(t *testing.T) {
 	if runtime.GOOS != "windows" {
 		t.Skip("windows-specific behavior")

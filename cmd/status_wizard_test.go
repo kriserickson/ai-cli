@@ -342,6 +342,170 @@ func TestPickModel_OpenAISelectError(t *testing.T) {
 	}
 }
 
+func TestRunStatus_LocalProvider_WithKey(t *testing.T) {
+	saveCmdConfig(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderLocal
+		cfg.Provider.Local.BaseURL = "http://localhost:11434/api/generate"
+		cfg.Provider.Local.APIKey = "local-secret-key-12345"
+		cfg.Provider.Model = "llama3"
+	})
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Provider: local") {
+		t.Fatalf("expected Provider: local\n%s", out)
+	}
+	if !strings.Contains(out, "Base URL:") {
+		t.Fatalf("expected Base URL for local provider\n%s", out)
+	}
+	if !strings.Contains(out, "API Key:") {
+		t.Fatalf("expected API Key shown\n%s", out)
+	}
+	// Should show masked key, not "not set"
+	if strings.Contains(out, "not set") {
+		t.Fatalf("expected masked key for local provider with key set\n%s", out)
+	}
+}
+
+func TestRunStatus_LocalProvider_NoKey(t *testing.T) {
+	saveCmdConfig(t, func(cfg *config.Config) {
+		cfg.Provider.Default = config.ProviderLocal
+		cfg.Provider.Local.BaseURL = "http://localhost:11434/api/generate"
+		cfg.Provider.Local.APIKey = ""
+		cfg.Provider.Model = "llama3"
+	})
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Provider: local") {
+		t.Fatalf("expected Provider: local\n%s", out)
+	}
+	if !strings.Contains(out, "optional for local") {
+		t.Fatalf("expected 'optional for local' message\n%s", out)
+	}
+}
+
+func TestEnsureAPIKey_LocalProvider(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if err := ensureAPIKey(cfg, config.ProviderLocal); err != nil {
+		t.Fatalf("ensureAPIKey(local) error: %v", err)
+	}
+}
+
+func TestPickProvider_Local(t *testing.T) {
+	stubWizardHooks(t)
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		*(response.(*int)) = 2 // Local
+		return nil
+	}
+
+	got, err := pickProvider()
+	if err != nil {
+		t.Fatalf("pickProvider() error = %v", err)
+	}
+	if got != config.ProviderLocal {
+		t.Fatalf("pickProvider() = %q, want %q", got, config.ProviderLocal)
+	}
+}
+
+func TestPickModel_LocalProvider(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{
+			{ID: "llama3:latest", Name: "llama3:latest", Company: "Local"},
+			{ID: "codellama:7b", Name: "codellama:7b", Company: "Local"},
+		}, nil
+	}
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		*(response.(*int)) = 1
+		return nil
+	}
+
+	cfg := config.DefaultConfig()
+	got, err := pickModel(cfg, config.ProviderLocal)
+	if err != nil {
+		t.Fatalf("pickModel(local) error = %v", err)
+	}
+	if got != "codellama:7b" {
+		t.Fatalf("pickModel(local) = %q, want %q", got, "codellama:7b")
+	}
+}
+
+func TestPickModel_LocalFetchError(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return nil, errors.New("connection refused")
+	}
+
+	cfg := config.DefaultConfig()
+	_, err := pickModel(cfg, config.ProviderLocal)
+	if err == nil {
+		t.Fatal("pickModel(local) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "fetch models") {
+		t.Fatalf("error = %q, want fetch models error", err.Error())
+	}
+}
+
+func TestPickModel_LocalNoModels(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{}, nil
+	}
+
+	cfg := config.DefaultConfig()
+	_, err := pickModel(cfg, config.ProviderLocal)
+	if err == nil {
+		t.Fatal("pickModel(local) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "no models available") {
+		t.Fatalf("error = %q, want no models error", err.Error())
+	}
+}
+
+func TestPickModel_LocalSelectError(t *testing.T) {
+	stubWizardHooks(t)
+
+	origFetchLocal := wizardFetchLocalModels
+	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
+
+	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{{ID: "llama3", Name: "llama3", Company: "Local"}}, nil
+	}
+	wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
+		return errors.New("user canceled")
+	}
+
+	cfg := config.DefaultConfig()
+	_, err := pickModel(cfg, config.ProviderLocal)
+	if err == nil {
+		t.Fatal("pickModel(local) error = nil, want error")
+	}
+	if !strings.Contains(err.Error(), "user canceled") {
+		t.Fatalf("error = %q, want user canceled", err.Error())
+	}
+}
+
 func TestPickModel_NoModelsBranches(t *testing.T) {
 	t.Run("openrouter no models", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -58,30 +61,44 @@ func TestApplyAction_SetProvider(t *testing.T) {
 
 func TestApplyAction_SetKey(t *testing.T) {
 	tests := []struct {
-		name    string
-		key     string
-		value   string
-		check   func(*Config) string // returns "" on success, or error description
-		wantErr bool
+		name     string
+		key      string
+		value    string
+		provider string // override default provider if non-empty
+		check    func(*Config) string
+		wantErr  bool
 	}{
 		{
-			name:  "openai_key",
-			key:   "openai_key",
-			value: "sk-test-openai",
+			name:  "llm_key sets current provider (openrouter)",
+			key:   "llm_key",
+			value: "sk-test-llm",
 			check: func(c *Config) string {
-				if c.Provider.OpenAI.APIKey != "sk-test-openai" {
-					return "OpenAI APIKey not set"
+				if c.Provider.OpenRouter.APIKey != "sk-test-llm" {
+					return "OpenRouter APIKey not set via llm_key"
 				}
 				return ""
 			},
 		},
 		{
-			name:  "openrouter_key",
-			key:   "openrouter_key",
-			value: "sk-test-openrouter",
+			name:     "llm_key sets openai when provider is openai",
+			key:      "llm_key",
+			value:    "sk-test-openai",
+			provider: ProviderOpenAI,
 			check: func(c *Config) string {
-				if c.Provider.OpenRouter.APIKey != "sk-test-openrouter" {
-					return "OpenRouter APIKey not set"
+				if c.Provider.OpenAI.APIKey != "sk-test-openai" {
+					return "OpenAI APIKey not set via llm_key"
+				}
+				return ""
+			},
+		},
+		{
+			name:     "llm_key sets local when provider is local",
+			key:      "llm_key",
+			value:    "sk-test-local",
+			provider: ProviderLocal,
+			check: func(c *Config) string {
+				if c.Provider.Local.APIKey != "sk-test-local" {
+					return "Local APIKey not set via llm_key"
 				}
 				return ""
 			},
@@ -97,6 +114,9 @@ func TestApplyAction_SetKey(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := applyTestCfg(t)
+			if tt.provider != "" {
+				cfg.Provider.Default = tt.provider
+			}
 			err := ApplyAction(cfg, "set_key", tt.key, tt.value)
 			if tt.wantErr {
 				if err == nil {
@@ -195,6 +215,27 @@ func TestApplyAction_SetSafety_UnknownKey(t *testing.T) {
 	err := ApplyAction(cfg, "set_safety", "nonexistent", "value")
 	if err == nil {
 		t.Fatal("expected error for unknown safety key, got nil")
+	}
+}
+
+func TestApplyAction_SaveError(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission-based test not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	// Create a regular file where .ai-cli should be so Save fails.
+	if err := os.WriteFile(filepath.Join(tmpDir, ".ai-cli"), []byte("blocker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := DefaultConfig()
+	err := ApplyAction(cfg, "set_model", "", "gpt-4o")
+	if err == nil {
+		t.Fatal("expected error when Save fails, got nil")
 	}
 }
 

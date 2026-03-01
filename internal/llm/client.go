@@ -52,6 +52,14 @@ func NewClient(cfg *config.Config, debugOut io.Writer) (Client, error) {
 	case config.ProviderOpenRouter:
 		baseURL = cfg.Provider.OpenRouter.BaseURL
 		apiKey = cfg.Provider.OpenRouter.APIKey
+	case config.ProviderLocal:
+		return &ollamaClient{
+			baseURL:    strings.TrimRight(cfg.Provider.Local.BaseURL, "/"),
+			apiKey:     cfg.Provider.Local.APIKey,
+			model:      cfg.Provider.Model,
+			debugOut:   debugOut,
+			httpClient: &http.Client{Timeout: 120 * time.Second},
+		}, nil
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider.Default)
 	}
@@ -140,6 +148,89 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 
 	content := chatResp.Choices[0].Message.Content
 	return parseResponse(content)
+}
+
+// ollamaClient implements the Client interface for Ollama-compatible local servers.
+type ollamaClient struct {
+	baseURL    string
+	apiKey     string
+	model      string
+	debugOut   io.Writer
+	httpClient *http.Client
+}
+
+type ollamaRequest struct {
+	Model  string `json:"model"`
+	Prompt string `json:"prompt"`
+	System string `json:"system,omitempty"`
+	Stream bool   `json:"stream"`
+}
+
+type ollamaResponse struct {
+	Response string `json:"response"`
+	Done     bool   `json:"done"`
+	Error    string `json:"error,omitempty"`
+}
+
+func (c *ollamaClient) Chat(systemPrompt, userMessage string) (*Response, error) {
+	req := ollamaRequest{
+		Model:  c.model,
+		Prompt: userMessage,
+		System: systemPrompt,
+		Stream: false,
+	}
+
+	body, err := json.Marshal(req)
+	if err != nil {
+		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	if c.debugOut != nil {
+		prettyReq, _ := json.MarshalIndent(req, "", "  ")
+		ts := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
+	}
+
+	httpReq, err := http.NewRequestWithContext(context.Background(), "POST", c.baseURL, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	httpReq.Header.Set("Content-Type", "application/json")
+	if c.apiKey != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("local server request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read response: %w", err)
+	}
+
+	if c.debugOut != nil {
+		ts := time.Now().Format("2006-01-02 15:04:05")
+		fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("local server error (HTTP %d): %s", resp.StatusCode, string(respBody))
+	}
+
+	var ollamaResp ollamaResponse
+	if err := json.Unmarshal(respBody, &ollamaResp); err != nil {
+		return nil, fmt.Errorf("parse response: %w", err)
+	}
+
+	if ollamaResp.Error != "" {
+		return nil, fmt.Errorf("local server error: %s", ollamaResp.Error)
+	}
+
+	return parseResponse(ollamaResp.Response)
 }
 
 func parseResponse(content string) (*Response, error) {

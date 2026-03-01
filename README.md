@@ -1,6 +1,6 @@
 # AI CLI
 
-AI CLI translates natural language into shell commands using LLMs (OpenAI or OpenRouter), then applies a safety policy before execution.
+AI CLI translates natural language into shell commands using LLMs (OpenAI, OpenRouter, or a local server), then applies a safety policy before execution.
 
 ## Important Safety Warning
 
@@ -251,7 +251,7 @@ ai version
 ai config show
 ai config get provider
 ai config set provider openai
-ai config set openai_key sk-your-key-here
+ai config set llm_key sk-your-key-here
 ```
 
 ## Shell Completion
@@ -344,20 +344,19 @@ Available `ai config get/set` keys:
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `provider` | Active provider (`openai` or `openrouter`) | `openrouter` |
+| `provider` | Active provider (`openai`, `openrouter`, or `local`) | `openrouter` |
 | `model` | Model identifier | `anthropic/claude-3.5-sonnet` |
-| `openai_key` | OpenAI API key | (empty) |
-| `openrouter_key` | OpenRouter API key | (empty) |
-| `openai_url` | OpenAI base URL | `https://api.openai.com/v1` |
-| `openrouter_url` | OpenRouter base URL | `https://openrouter.ai/api/v1` |
+| `llm_key` | API key for the current provider | (empty) |
+| `llm_url` | Base URL for the current provider | (provider default) |
 | `always_confirm` | Always prompt before execution (`true`/`false`) | `false` |
 | `min_certainty` | Auto-execute threshold (0-100) | `80` |
 | `debug` | Debug mode (`none`, `screen`, `file`) | `none` |
 
 Notes:
 
+- `llm_key` and `llm_url` read and write the key/URL for whichever provider is currently selected
+- `ai config get llm_key` returns a masked value
 - `allowlist_prefixes` exists in config but is currently edited directly in `config.toml`
-- `ai config get openai_key` and `ai config get openrouter_key` return masked values
 
 ## Debugging
 
