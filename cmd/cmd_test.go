@@ -82,10 +82,6 @@ func TestGetConfigValue(t *testing.T) {
 		{"provider", "openrouter"},
 		{"default", "openrouter"},
 		{"model", "anthropic/claude-3.5-sonnet"},
-		{"openai_key", "sk-l...1234"},
-		{"openrouter_key", "****"},
-		{"openai_url", "https://api.openai.com/v1"},
-		{"openrouter_url", "https://openrouter.ai/api/v1"},
 		{"always_confirm", "false"},
 		{"min_certainty", "80"},
 		{"allowlist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
@@ -202,10 +198,6 @@ func TestSetConfigValue(t *testing.T) {
 		{"provider", "openai", func(c *config.Config) bool { return c.Provider.Default == "openai" }},
 		{"default", "openai", func(c *config.Config) bool { return c.Provider.Default == "openai" }},
 		{"model", "gpt-4o", func(c *config.Config) bool { return c.Provider.Model == "gpt-4o" }},
-		{"openai_key", "sk-abc", func(c *config.Config) bool { return c.Provider.OpenAI.APIKey == "sk-abc" }},
-		{"openrouter_key", "sk-or-abc", func(c *config.Config) bool { return c.Provider.OpenRouter.APIKey == "sk-or-abc" }},
-		{"openai_url", "https://proxy.example.com", func(c *config.Config) bool { return c.Provider.OpenAI.BaseURL == "https://proxy.example.com" }},
-		{"openrouter_url", "https://proxy.example.com", func(c *config.Config) bool { return c.Provider.OpenRouter.BaseURL == "https://proxy.example.com" }},
 		{"always_confirm", "true", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
 		{"always_confirm", "false", func(c *config.Config) bool { return !c.Safety.AlwaysConfirm }},
 		{"always_confirm", "TRUE", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
@@ -507,15 +499,15 @@ func TestConfigSet_MinCertainty(t *testing.T) {
 func TestConfigSet_URLs(t *testing.T) {
 	tempHome(t)
 
-	if _, err := runCmd(t, "config", "set", "openai_url", "https://proxy.example.com/v1"); err != nil {
-		t.Fatalf("config set openai_url: %v", err)
+	if _, err := runCmd(t, "config", "set", "llm_url", "https://proxy.example.com/v1"); err != nil {
+		t.Fatalf("config set llm_url: %v", err)
 	}
-	out, err := runCmd(t, "config", "get", "openai_url")
+	out, err := runCmd(t, "config", "get", "llm_url")
 	if err != nil {
-		t.Fatalf("config get openai_url: %v", err)
+		t.Fatalf("config get llm_url: %v", err)
 	}
 	if !strings.Contains(out, "https://proxy.example.com/v1") {
-		t.Errorf("openai_url = %q", strings.TrimSpace(out))
+		t.Errorf("llm_url = %q", strings.TrimSpace(out))
 	}
 }
 

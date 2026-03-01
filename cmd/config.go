@@ -16,10 +16,6 @@ import (
 var configKeys = []string{
 	"provider",
 	"model",
-	"openai_key",
-	"openrouter_key",
-	"openai_url",
-	"openrouter_url",
 	"llm_key",
 	"llm_url",
 	"always_confirm",
@@ -131,14 +127,6 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return cfg.Provider.Default, nil
 	case "model":
 		return cfg.Provider.Model, nil
-	case "openai_key":
-		return maskKey(cfg.Provider.OpenAI.APIKey), nil
-	case "openrouter_key":
-		return maskKey(cfg.Provider.OpenRouter.APIKey), nil
-	case "openai_url":
-		return cfg.Provider.OpenAI.BaseURL, nil
-	case "openrouter_url":
-		return cfg.Provider.OpenRouter.BaseURL, nil
 	case "llm_key":
 		return maskKey(currentProviderDetail(cfg).APIKey), nil
 	case "llm_url":
@@ -165,14 +153,6 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Provider.Default = value
 	case "model":
 		cfg.Provider.Model = value
-	case "openai_key":
-		cfg.Provider.OpenAI.APIKey = value
-	case "openrouter_key":
-		cfg.Provider.OpenRouter.APIKey = value
-	case "openai_url":
-		cfg.Provider.OpenAI.BaseURL = value
-	case "openrouter_url":
-		cfg.Provider.OpenRouter.BaseURL = value
 	case "llm_key":
 		currentProviderDetail(cfg).APIKey = value
 	case "llm_url":
@@ -198,7 +178,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.Debug = value
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, openai_key, openrouter_key, openai_url, openrouter_url, always_confirm, min_certainty, debug", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, min_certainty, debug", key)
 	}
 	return nil
 }

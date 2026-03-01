@@ -23,10 +23,6 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 		cfg.Provider.Default = value
 	case "set_key":
 		switch key {
-		case "openai_key":
-			cfg.Provider.OpenAI.APIKey = value
-		case "openrouter_key":
-			cfg.Provider.OpenRouter.APIKey = value
 		case "llm_key":
 			switch cfg.Provider.Default {
 			case ProviderOpenAI:

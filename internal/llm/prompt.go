@@ -43,7 +43,7 @@ For requests to change AI CLI configuration (model, provider, API key, safety se
 Valid config actions: set_model, set_provider, set_key, set_safety
 - set_model: key="model", value="model-name"
 - set_provider: key="default", value="openai", "openrouter", or "local"
-- set_key: key="llm_key" (sets key on current provider), or "openai_key", "openrouter_key" for a specific provider, value="the-key"
+- set_key: key="llm_key" (sets key on current provider), value="the-key"
 - set_safety: key="always_confirm" or "min_certainty", value="true"/"false" or number`
 
 const darwinHints = `

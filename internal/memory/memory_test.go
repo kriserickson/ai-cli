@@ -125,3 +125,97 @@ func TestLoadEmptyFile(t *testing.T) {
 		t.Fatalf("expected empty slice, got %d entries", len(entries))
 	}
 }
+
+func TestLoad_InvalidJSON(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	memDir := filepath.Join(dir, ".ai-cli")
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "memory.json"), []byte("{bad json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error for invalid JSON, got nil")
+	}
+}
+
+func TestLoad_ReadError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	memDir := filepath.Join(dir, ".ai-cli")
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Make memory.json a directory so ReadFile fails with a non-NotExist error
+	if err := os.MkdirAll(filepath.Join(memDir, "memory.json"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("expected error when memory.json is a directory, got nil")
+	}
+}
+
+func TestSave_MkdirAllError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	// Create a regular file where .ai-cli directory should be
+	if err := os.WriteFile(filepath.Join(dir, ".ai-cli"), []byte("blocker"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Save([]Entry{{Keyword: "test", Content: "value"}})
+	if err == nil {
+		t.Fatal("expected error when .ai-cli is a file, got nil")
+	}
+}
+
+func TestAdd_LoadError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	memDir := filepath.Join(dir, ".ai-cli")
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	// Write invalid JSON so Load fails
+	if err := os.WriteFile(filepath.Join(memDir, "memory.json"), []byte("{bad"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Add("key", "value")
+	if err == nil {
+		t.Fatal("expected error from Add when Load fails, got nil")
+	}
+}
+
+func TestRemove_LoadError(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+
+	memDir := filepath.Join(dir, ".ai-cli")
+	if err := os.MkdirAll(memDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(memDir, "memory.json"), []byte("{bad"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Remove("key")
+	if err == nil {
+		t.Fatal("expected error from Remove when Load fails, got nil")
+	}
+}
