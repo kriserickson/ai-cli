@@ -119,18 +119,33 @@ func TestExecListDirectory_DefaultPath(t *testing.T) {
 	}
 }
 
-func TestExecListDirectory_CommandFailure(t *testing.T) {
-	if runtime.GOOS == windowsOS {
-		t.Skip("PATH-based command stubs are Unix-specific")
+func TestExecListDirectory_NonExistent(t *testing.T) {
+	dir := t.TempDir()
+	_, err := execListDirectory("nonexistent", dir)
+	if err == nil {
+		t.Fatal("execListDirectory(nonexistent) error = nil, want error")
+	}
+}
+
+func TestExecListDirectory_BlockedEntriesFiltered(t *testing.T) {
+	dir := t.TempDir()
+	// Create a safe file and a blocked file in the same directory
+	if err := os.WriteFile(filepath.Join(dir, "safe.txt"), []byte("ok"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile safe.txt: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".env"), []byte("SECRET=x"), 0o644); err != nil {
+		t.Fatalf("os.WriteFile .env: %v", err)
 	}
 
-	dir := t.TempDir()
-	writeFakeCommand(t, dir, "ls", "#!/bin/sh\nexit 1\n")
-	t.Setenv("PATH", dir)
-
-	_, err := execListDirectory(".", dir)
-	if err == nil {
-		t.Fatal("execListDirectory() error = nil, want error")
+	output, err := execListDirectory("", dir)
+	if err != nil {
+		t.Fatalf("execListDirectory: %v", err)
+	}
+	if !strings.Contains(output, "safe.txt") {
+		t.Errorf("output should contain safe.txt, got: %s", output)
+	}
+	if strings.Contains(output, ".env") {
+		t.Errorf("output should NOT contain .env (blocked), got: %s", output)
 	}
 }
 

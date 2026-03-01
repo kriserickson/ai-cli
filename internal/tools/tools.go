@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -102,17 +104,41 @@ func execListDirectory(path, cwd string) (string, error) {
 		return "", err
 	}
 
-	var cmd *exec.Cmd
-	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", fmt.Sprintf("Get-ChildItem '%s'", absPath))
-	} else {
-		cmd = exec.CommandContext(context.Background(), "ls", "-la", absPath)
-	}
-	out, err := cmd.CombinedOutput()
+	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return "", fmt.Errorf("list_directory failed: %s", string(out))
+		return "", fmt.Errorf("list_directory failed: %w", err)
 	}
-	return string(out), nil
+
+	var b strings.Builder
+	for _, entry := range entries {
+		// Skip entries that match blocked patterns. If the relative path cannot
+		// be computed, skip the entry to avoid accidentally exposing a blocked file.
+		rel, relErr := filepath.Rel(cwd, filepath.Join(absPath, entry.Name()))
+		if relErr != nil || isBlocked(rel) {
+			continue
+		}
+
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			// Entry may have been removed after ReadDir; skip it.
+			continue
+		}
+
+		var size int64
+		if !entry.IsDir() {
+			size = info.Size()
+		}
+
+		entryType := "-"
+		if entry.IsDir() {
+			entryType = "d"
+		} else if info.Mode()&fs.ModeSymlink != 0 {
+			entryType = "l"
+		}
+
+		fmt.Fprintf(&b, "%s %10d %s %s\n", entryType+info.Mode().Perm().String(), size, info.ModTime().Format("Jan _2 15:04"), entry.Name())
+	}
+	return b.String(), nil
 }
 
 func execReadFile(path, cwd string) (string, error) {
