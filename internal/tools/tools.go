@@ -223,8 +223,12 @@ func execNetworkConnections() (string, error) {
 	var cmd *exec.Cmd
 	if runtime.GOOS == windowsOS {
 		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-NetTCPConnection | Format-Table -AutoSize")
+	} else if ssPath, err := exec.LookPath("ss"); err == nil {
+		cmd = exec.CommandContext(context.Background(), ssPath, "-an")
+	} else if netstatPath, err := exec.LookPath("netstat"); err == nil {
+		cmd = exec.CommandContext(context.Background(), netstatPath, "-an")
 	} else {
-		cmd = exec.CommandContext(context.Background(), "netstat", "-an")
+		return "", errors.New("network_connections failed: neither ss nor netstat found")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
