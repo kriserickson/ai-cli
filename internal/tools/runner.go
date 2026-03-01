@@ -86,6 +86,8 @@ func runWithTools(client llm.Client, systemPrompt, userMessage string, cfg *conf
 			}
 		case config.ToolCallingAlwaysAllow:
 			// No prompting
+		default:
+			return nil, fmt.Errorf("unknown tool_calling mode %q; valid modes are: never, always_prompt, dangerous_prompt, always_allow", cfg.Safety.ToolCalling)
 		}
 
 		// Execute tool
