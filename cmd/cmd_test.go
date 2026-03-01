@@ -100,6 +100,72 @@ func TestGetConfigValue(t *testing.T) {
 	}
 }
 
+// --- llm_key / llm_url (current-provider aliases) ---
+
+func TestGetConfigValue_LlmKey(t *testing.T) {
+	cfg := config.DefaultConfig() // default provider is openrouter
+	cfg.Provider.OpenRouter.APIKey = "sk-or-longkey1234"
+
+	got, err := getConfigValue(cfg, "llm_key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != maskKey("sk-or-longkey1234") {
+		t.Errorf("llm_key = %q, want %q", got, maskKey("sk-or-longkey1234"))
+	}
+
+	// Switch provider to openai
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.OpenAI.APIKey = "sk-openai-longkey1234"
+	got, err = getConfigValue(cfg, "llm_key")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != maskKey("sk-openai-longkey1234") {
+		t.Errorf("llm_key (openai) = %q, want %q", got, maskKey("sk-openai-longkey1234"))
+	}
+}
+
+func TestGetConfigValue_LlmUrl(t *testing.T) {
+	cfg := config.DefaultConfig() // default provider is openrouter
+	got, err := getConfigValue(cfg, "llm_url")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != cfg.Provider.OpenRouter.BaseURL {
+		t.Errorf("llm_url = %q, want %q", got, cfg.Provider.OpenRouter.BaseURL)
+	}
+}
+
+func TestSetConfigValue_LlmKey(t *testing.T) {
+	cfg := config.DefaultConfig() // default provider is openrouter
+	if err := setConfigValue(cfg, "llm_key", "sk-new-key"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider.OpenRouter.APIKey != "sk-new-key" {
+		t.Errorf("OpenRouter.APIKey = %q, want %q", cfg.Provider.OpenRouter.APIKey, "sk-new-key")
+	}
+
+	// Switch to openai and set again
+	cfg.Provider.Default = config.ProviderOpenAI
+	if err := setConfigValue(cfg, "llm_key", "sk-openai-new"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider.OpenAI.APIKey != "sk-openai-new" {
+		t.Errorf("OpenAI.APIKey = %q, want %q", cfg.Provider.OpenAI.APIKey, "sk-openai-new")
+	}
+}
+
+func TestSetConfigValue_LlmUrl(t *testing.T) {
+	cfg := config.DefaultConfig()
+	if err := setConfigValue(cfg, "llm_url", "https://custom.example.com"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Provider.OpenRouter.BaseURL != "https://custom.example.com" {
+		t.Errorf("OpenRouter.BaseURL = %q, want %q", cfg.Provider.OpenRouter.BaseURL, "https://custom.example.com")
+	}
+}
+
 func TestGetConfigValue_UnknownKey(t *testing.T) {
 	_, err := getConfigValue(config.DefaultConfig(), "nonexistent")
 	if err == nil {

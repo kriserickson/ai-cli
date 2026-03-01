@@ -20,6 +20,8 @@ var configKeys = []string{
 	"openrouter_key",
 	"openai_url",
 	"openrouter_url",
+	"llm_key",
+	"llm_url",
 	"always_confirm",
 	"min_certainty",
 	"debug",
@@ -27,7 +29,7 @@ var configKeys = []string{
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	"provider":       {config.ProviderOpenAI, config.ProviderOpenRouter},
+	"provider":       {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"always_confirm": {"true", "false"},
 	"debug":          {"none", "screen", "file"},
 }
@@ -110,6 +112,19 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 }
 
+// currentProviderDetail returns a pointer to the ProviderDetail for the
+// currently selected provider (cfg.Provider.Default).
+func currentProviderDetail(cfg *config.Config) *config.ProviderDetail {
+	switch cfg.Provider.Default {
+	case config.ProviderOpenAI:
+		return &cfg.Provider.OpenAI
+	case config.ProviderLocal:
+		return &cfg.Provider.Local
+	default: // openrouter (the default)
+		return &cfg.Provider.OpenRouter
+	}
+}
+
 func getConfigValue(cfg *config.Config, key string) (string, error) {
 	switch key {
 	case "provider", "default":
@@ -124,6 +139,10 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return cfg.Provider.OpenAI.BaseURL, nil
 	case "openrouter_url":
 		return cfg.Provider.OpenRouter.BaseURL, nil
+	case "llm_key":
+		return maskKey(currentProviderDetail(cfg).APIKey), nil
+	case "llm_url":
+		return currentProviderDetail(cfg).BaseURL, nil
 	case "always_confirm":
 		return strconv.FormatBool(cfg.Safety.AlwaysConfirm), nil
 	case "min_certainty":
@@ -140,8 +159,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 func setConfigValue(cfg *config.Config, key, value string) error {
 	switch key {
 	case "provider", "default":
-		if value != config.ProviderOpenAI && value != config.ProviderOpenRouter {
-			return errors.New("provider must be 'openai' or 'openrouter'")
+		if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
+			return errors.New("provider must be 'openai', 'openrouter', or 'local'")
 		}
 		cfg.Provider.Default = value
 	case "model":
@@ -154,6 +173,10 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Provider.OpenAI.BaseURL = value
 	case "openrouter_url":
 		cfg.Provider.OpenRouter.BaseURL = value
+	case "llm_key":
+		currentProviderDetail(cfg).APIKey = value
+	case "llm_url":
+		currentProviderDetail(cfg).BaseURL = value
 	case "always_confirm":
 		b, err := config.ParseBool(value)
 		if err != nil {
@@ -175,7 +198,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.Debug = value
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, openai_key, openrouter_key, openai_url, openrouter_url, always_confirm, min_certainty, debug", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, openai_key, openrouter_key, openai_url, openrouter_url, always_confirm, min_certainty, debug", key)
 	}
 	return nil
 }

@@ -87,6 +87,17 @@ func TestApplyAction_SetKey(t *testing.T) {
 			},
 		},
 		{
+			name:  "llm_key sets current provider (openrouter)",
+			key:   "llm_key",
+			value: "sk-test-llm",
+			check: func(c *Config) string {
+				if c.Provider.OpenRouter.APIKey != "sk-test-llm" {
+					return "OpenRouter APIKey not set via llm_key"
+				}
+				return ""
+			},
+		},
+		{
 			name:    "unknown key",
 			key:     "anthropic_key",
 			value:   "sk-test",
