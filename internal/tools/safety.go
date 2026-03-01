@@ -49,6 +49,8 @@ var sensitiveEnvKeys = []string{
 
 // ValidatePath resolves path to an absolute path and checks that it is
 // contained within cwd and does not match any blocked pattern.
+// It also resolves symlinks and re-validates the resolved path to prevent
+// symlink attacks that could point outside cwd or to blocked files.
 func ValidatePath(path, cwd string) (string, error) {
 	// Resolve relative to cwd
 	var abs string
@@ -58,8 +60,9 @@ func ValidatePath(path, cwd string) (string, error) {
 		abs = filepath.Clean(filepath.Join(cwd, path))
 	}
 
-	// Ensure the path is under cwd
 	cwdClean := filepath.Clean(cwd)
+
+	// Ensure the path is under cwd
 	if abs != cwdClean && !strings.HasPrefix(abs, cwdClean+string(os.PathSeparator)) {
 		return "", fmt.Errorf("path %q is outside the working directory", path)
 	}
@@ -73,6 +76,26 @@ func ValidatePath(path, cwd string) (string, error) {
 	if isBlocked(rel) {
 		return "", fmt.Errorf("access to %q is blocked for security", path)
 	}
+
+	// Resolve symlinks and re-validate the resolved path to prevent symlink
+	// attacks where a path within cwd points to a target outside cwd or
+	// matching a blocked pattern (e.g. safe.txt -> /etc/passwd).
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
+		resolvedClean := filepath.Clean(resolved)
+		if resolvedClean != cwdClean && !strings.HasPrefix(resolvedClean, cwdClean+string(os.PathSeparator)) {
+			return "", fmt.Errorf("path %q resolves outside the working directory", path)
+		}
+		resolvedRel, relErr := filepath.Rel(cwdClean, resolvedClean)
+		if relErr != nil {
+			return "", fmt.Errorf("cannot compute relative path for resolved symlink: %w", relErr)
+		}
+		if isBlocked(resolvedRel) {
+			return "", fmt.Errorf("access to %q is blocked for security", path)
+		}
+	}
+	// If EvalSymlinks fails (e.g. path does not exist yet), the lexical
+	// checks above are sufficient and we fall through.
 
 	return abs, nil
 }
