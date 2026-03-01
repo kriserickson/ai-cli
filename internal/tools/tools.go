@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -104,20 +105,36 @@ func execListDirectory(path, cwd string) (string, error) {
 		return "", err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
-	defer cancel()
-
-	var cmd *exec.Cmd
-	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(ctx, "powershell", "-Command", fmt.Sprintf("Get-ChildItem '%s'", absPath))
-	} else {
-		cmd = exec.CommandContext(ctx, "ls", "-la", absPath)
-	}
-	out, err := cmd.CombinedOutput()
+	entries, err := os.ReadDir(absPath)
 	if err != nil {
-		return "", fmt.Errorf("list_directory failed: %s", string(out))
+		return "", fmt.Errorf("list_directory failed: %w", err)
 	}
-	return string(out), nil
+
+	var b strings.Builder
+	for _, entry := range entries {
+		entryAbs := filepath.Join(absPath, entry.Name())
+		rel, relErr := filepath.Rel(cwd, entryAbs)
+		if relErr != nil {
+			// Fall back to checking the entry name alone when relative path cannot be computed
+			if isBlocked(entry.Name()) {
+				continue
+			}
+		} else if isBlocked(rel) {
+			continue
+		}
+		info, infoErr := entry.Info()
+		if infoErr != nil {
+			fmt.Fprintf(&b, "?        ? ??? ?? ??:?? %s (error reading info)\n", entry.Name())
+			continue
+		}
+		fmt.Fprintf(&b, "%s %8d %s %s\n",
+			info.Mode(),
+			info.Size(),
+			info.ModTime().Format("Jan  2 15:04"),
+			entry.Name(),
+		)
+	}
+	return b.String(), nil
 }
 
 func execReadFile(path, cwd string) (string, error) {
@@ -156,7 +173,8 @@ func execCommandHelp(command string) (string, error) {
 	defer cancel()
 
 	if runtime.GOOS == windowsOS {
-		cmd := exec.CommandContext(ctx, "powershell", "-Command", fmt.Sprintf("Get-Help '%s'", command))
+		cmd := exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Help -Name $env:HELP_COMMAND")
+		cmd.Env = append(os.Environ(), "HELP_COMMAND="+command)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return "", fmt.Errorf("Get-Help failed: %s", string(out))
@@ -239,9 +257,13 @@ func execNetworkConnections() (string, error) {
 
 	var cmd *exec.Cmd
 	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(ctx, "powershell", "-Command", "Get-NetTCPConnection | Format-Table -AutoSize")
+		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-NetTCPConnection | Format-Table -AutoSize")
+	} else if ssPath, err := exec.LookPath("ss"); err == nil {
+		cmd = exec.CommandContext(context.Background(), ssPath, "-an")
+	} else if netstatPath, err := exec.LookPath("netstat"); err == nil {
+		cmd = exec.CommandContext(context.Background(), netstatPath, "-an")
 	} else {
-		cmd = exec.CommandContext(ctx, "netstat", "-an")
+		return "", errors.New("network_connections failed: neither ss nor netstat found")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
