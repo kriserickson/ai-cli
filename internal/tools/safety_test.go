@@ -1,6 +1,8 @@
 package tools
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -136,5 +138,98 @@ func TestFilterEnvironment(t *testing.T) {
 				t.Errorf("%s = %q, want %q", parts[0], parts[1], want)
 			}
 		}
+	}
+}
+
+func TestValidatePath_SymlinkOutsideCWD(t *testing.T) {
+	// Create a temporary directory to act as the project root (cwd).
+	cwd, err := os.MkdirTemp("", "cwd-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(cwd)
+
+	// Create a real file outside the cwd.
+	outside, err := os.MkdirTemp("", "outside-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(outside)
+
+	target := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(target, []byte("secret"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink inside cwd pointing to the outside file.
+	link := filepath.Join(cwd, "safe.txt")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	_, err = ValidatePath("safe.txt", cwd)
+	if err == nil {
+		t.Error("ValidatePath should have rejected symlink pointing outside cwd")
+	}
+	if err != nil && !strings.Contains(err.Error(), "outside") {
+		t.Errorf("expected 'outside' in error, got: %v", err)
+	}
+}
+
+func TestValidatePath_SymlinkToBlockedFile(t *testing.T) {
+	// Create a temporary directory to act as the project root (cwd).
+	cwd, err := os.MkdirTemp("", "cwd-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(cwd)
+
+	// Create a blocked-pattern file inside cwd (e.g. id_rsa).
+	blocked := filepath.Join(cwd, "id_rsa")
+	if err := os.WriteFile(blocked, []byte("private key"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink with an innocuous name pointing to the blocked file.
+	link := filepath.Join(cwd, "readme.txt")
+	if err := os.Symlink(blocked, link); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	_, err = ValidatePath("readme.txt", cwd)
+	if err == nil {
+		t.Error("ValidatePath should have rejected symlink pointing to a blocked file")
+	}
+	if err != nil && !strings.Contains(err.Error(), "blocked") {
+		t.Errorf("expected 'blocked' in error, got: %v", err)
+	}
+}
+
+func TestValidatePath_SymlinkWithinCWD(t *testing.T) {
+	// Create a temporary directory to act as the project root (cwd).
+	cwd, err := os.MkdirTemp("", "cwd-*")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(cwd)
+
+	// Create a regular (non-blocked) file inside cwd.
+	real := filepath.Join(cwd, "main.go")
+	if err := os.WriteFile(real, []byte("package main"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Create a symlink inside cwd pointing to the file within cwd.
+	link := filepath.Join(cwd, "alias.go")
+	if err := os.Symlink(real, link); err != nil {
+		t.Skip("symlinks not supported:", err)
+	}
+
+	got, err := ValidatePath("alias.go", cwd)
+	if err != nil {
+		t.Errorf("ValidatePath should allow symlink within cwd, got error: %v", err)
+	}
+	if got != link {
+		t.Errorf("ValidatePath returned %q, want %q", got, link)
 	}
 }
