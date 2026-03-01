@@ -165,6 +165,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 				return nil
 			},
 		}
+		cfg.Explain = explainFlag
 		return interactiveRun(Version, cmds, cfg, client, shellInfo)
 	}
 
