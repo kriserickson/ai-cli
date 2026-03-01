@@ -9,14 +9,16 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
 const (
-	maxOutputBytes = 4096
-	windowsOS      = "windows"
+	maxOutputBytes  = 4096
+	windowsOS       = "windows"
+	toolExecTimeout = 30 * time.Second
 )
 
 // ToolDef describes a tool the AI can request.
@@ -167,6 +169,9 @@ func execCommandHelp(command string) (string, error) {
 		return "", errors.New("command_help requires a command argument")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
+	defer cancel()
+
 	if runtime.GOOS == windowsOS {
 		cmd := exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Help -Name $env:HELP_COMMAND")
 		cmd.Env = append(os.Environ(), "HELP_COMMAND="+command)
@@ -179,14 +184,14 @@ func execCommandHelp(command string) (string, error) {
 
 	// Try tldr first, fall back to man
 	if tldrPath, err := exec.LookPath("tldr"); err == nil {
-		cmd := exec.CommandContext(context.Background(), tldrPath, command)
+		cmd := exec.CommandContext(ctx, tldrPath, command)
 		out, err := cmd.CombinedOutput()
 		if err == nil {
 			return string(out), nil
 		}
 	}
 
-	cmd := exec.CommandContext(context.Background(), "man", command)
+	cmd := exec.CommandContext(ctx, "man", command)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("man page not found for %q", command)
@@ -210,11 +215,14 @@ func execListMemories() (string, error) {
 }
 
 func execListProcesses() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Process | Format-Table -AutoSize")
+		cmd = exec.CommandContext(ctx, "powershell", "-Command", "Get-Process | Format-Table -AutoSize")
 	} else {
-		cmd = exec.CommandContext(context.Background(), "ps", "aux")
+		cmd = exec.CommandContext(ctx, "ps", "aux")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -224,14 +232,17 @@ func execListProcesses() (string, error) {
 }
 
 func execSystemResources() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case windowsOS:
-		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 | Format-Table Name,CPU,WorkingSet -AutoSize")
+		cmd = exec.CommandContext(ctx, "powershell", "-Command", "Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 | Format-Table Name,CPU,WorkingSet -AutoSize")
 	case "darwin":
-		cmd = exec.CommandContext(context.Background(), "top", "-l", "1", "-n", "5", "-s", "0")
+		cmd = exec.CommandContext(ctx, "top", "-l", "1", "-n", "5", "-s", "0")
 	default: // linux
-		cmd = exec.CommandContext(context.Background(), "top", "-bn1", "-o", "%CPU")
+		cmd = exec.CommandContext(ctx, "top", "-bn1", "-o", "%CPU")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -241,6 +252,9 @@ func execSystemResources() (string, error) {
 }
 
 func execNetworkConnections() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if runtime.GOOS == windowsOS {
 		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-NetTCPConnection | Format-Table -AutoSize")
@@ -263,13 +277,19 @@ func execPing(host string) (string, error) {
 		return "", errors.New("ping requires a host argument")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(context.Background(), "ping", "-n", "3", host)
+		cmd = exec.CommandContext(ctx, "ping", "-n", "3", host)
 	} else {
-		cmd = exec.CommandContext(context.Background(), "ping", "-c", "3", host)
+		cmd = exec.CommandContext(ctx, "ping", "-c", "3", host)
 	}
-	out, _ := cmd.CombinedOutput()
+	out, err := cmd.CombinedOutput()
+	if err != nil && ctx.Err() != nil {
+		return "", fmt.Errorf("ping timed out after %s", toolExecTimeout)
+	}
 	return string(out), nil
 }
 
@@ -287,11 +307,14 @@ func execCheckCommand(command string) (string, error) {
 }
 
 func execDiskUsage() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), toolExecTimeout)
+	defer cancel()
+
 	var cmd *exec.Cmd
 	if runtime.GOOS == windowsOS {
-		cmd = exec.CommandContext(context.Background(), "powershell", "-Command", "Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free -AutoSize")
+		cmd = exec.CommandContext(ctx, "powershell", "-Command", "Get-PSDrive -PSProvider FileSystem | Format-Table Name,Used,Free -AutoSize")
 	} else {
-		cmd = exec.CommandContext(context.Background(), "df", "-h")
+		cmd = exec.CommandContext(ctx, "df", "-h")
 	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
