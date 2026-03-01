@@ -20,7 +20,8 @@ For shell command requests, respond with:
       "command": "the shell command to run",
       "description": "brief explanation of what it does",
       "risk": "safe or risky",
-      "certainty": 90
+      "certainty": 90,
+      "explanation": "(optional) step-by-step breakdown of the command's flags and arguments"
     }
   ]
 }
@@ -28,6 +29,7 @@ For shell command requests, respond with:
 Rules for commands:
 - "risk" must be "safe" (read-only, informational) or "risky" (modifies files, processes, system state)
 - "certainty" is 0-100, your confidence this is the correct command for what the user asked
+- "explanation" is optional and only required when explicitly requested
 - For multi-step tasks, return multiple commands in order. Use shell constructs like $(...) or pipes to chain when possible
 - Generate commands appropriate for the detected OS and shell
 - Never generate commands that could cause irreversible damage without clear user intent
