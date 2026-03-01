@@ -5,7 +5,8 @@
       "Bash(go build:*)",
       "Bash(./ai.exe status:*)",
       "Bash(./ai.exe:*)",
-      "Bash(go get:*)"
+      "Bash(go get:*)",
+      "Bash(cd /c/Projects/go/ai-cli && go tool cover -func=coverage.out 2>&1)"
     ]
   }
 }
