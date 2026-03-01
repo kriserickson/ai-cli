@@ -182,22 +182,22 @@ func TestConfigDir_And_ConfigPath(t *testing.T) {
 	t.Setenv("HOME", tmpDir)
 	t.Setenv("USERPROFILE", tmpDir)
 
-	dir, err := ConfigDir()
+	dir, err := Dir()
 	if err != nil {
-		t.Fatalf("ConfigDir error: %v", err)
+		t.Fatalf("Dir error: %v", err)
 	}
 	wantDir := filepath.Join(tmpDir, ".ai-cli")
 	if dir != wantDir {
-		t.Errorf("ConfigDir() = %q, want %q", dir, wantDir)
+		t.Errorf("Dir() = %q, want %q", dir, wantDir)
 	}
 
-	path, err := ConfigPath()
+	path, err := Path()
 	if err != nil {
-		t.Fatalf("ConfigPath error: %v", err)
+		t.Fatalf("Path error: %v", err)
 	}
 	wantPath := filepath.Join(tmpDir, ".ai-cli", "config.toml")
 	if path != wantPath {
-		t.Errorf("ConfigPath() = %q, want %q", path, wantPath)
+		t.Errorf("Path() = %q, want %q", path, wantPath)
 	}
 }
 

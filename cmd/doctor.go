@@ -77,7 +77,7 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 	printCheck("Model", true, cfg.Provider.Model)
 
 	// Check 4: noglob alias recommendation for zsh users
-	if runtime.GOOS != "windows" {
+	if runtime.GOOS != windows {
 		if !checkNoglobAlias() {
 			warnings++
 		}

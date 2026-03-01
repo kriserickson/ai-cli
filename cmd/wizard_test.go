@@ -385,7 +385,7 @@ func TestRunModelWizard(t *testing.T) {
 	t.Run("success openrouter with new key", func(t *testing.T) {
 		stubWizardHooks(t)
 		call := 0
-		wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
 			switch call {
 			case 0: // provider
 				*(response.(*int)) = 1 // OpenRouter

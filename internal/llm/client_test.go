@@ -28,7 +28,7 @@ func TestDebugWriter_File(t *testing.T) {
 	t.Setenv("USERPROFILE", tmpDir)
 
 	// Ensure config dir exists
-	configDir, _ := config.ConfigDir()
+	configDir, _ := config.Dir()
 	if err := os.MkdirAll(configDir, 0o700); err != nil {
 		t.Fatalf("MkdirAll: %v", err)
 	}
@@ -304,7 +304,7 @@ func TestChat_InvalidLLMResponseJSON(t *testing.T) {
 		chatResp := ChatResponse{
 			Choices: []Choice{{Message: Message{Content: "not valid json"}}},
 		}
-		json.NewEncoder(w).Encode(chatResp)
+		_ = json.NewEncoder(w).Encode(chatResp)
 	}))
 	defer server.Close()
 

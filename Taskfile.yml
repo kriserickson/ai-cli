@@ -72,6 +72,11 @@ tasks:
     cmds:
       - go test -cover ./...
 
+  lint:
+    desc: Lint the Go code using golangci-lint
+    cmds:
+      - golangci-lint run ./...
+
   test:coverage:
     desc: Run all Go tests
     cmds:

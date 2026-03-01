@@ -444,8 +444,12 @@ func TestConfigShow_LoadError(t *testing.T) {
 	// Write an invalid TOML file
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".ai-cli")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	_, err := runCmd(t, "config", "show")
 	if err == nil {
@@ -458,8 +462,12 @@ func TestConfigGet_LoadError(t *testing.T) {
 
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".ai-cli")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	_, err := runCmd(t, "config", "get", "model")
 	if err == nil {
@@ -472,8 +480,12 @@ func TestConfigSet_LoadError(t *testing.T) {
 
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".ai-cli")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	_, err := runCmd(t, "config", "set", "model", "gpt-4o")
 	if err == nil {

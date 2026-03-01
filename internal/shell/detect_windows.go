@@ -23,7 +23,7 @@ func parentShellProcess() string {
 	if err != nil {
 		return ""
 	}
-	defer windows.CloseHandle(snapshot)
+	defer func() { _ = windows.CloseHandle(snapshot) }()
 
 	type procInfo struct {
 		ppid uint32
@@ -46,8 +46,8 @@ func parentShellProcess() string {
 	}
 
 	// Walk up from the current process up to 10 levels.
-	pid := uint32(os.Getpid())
-	for i := 0; i < 10; i++ {
+	pid := uint32(os.Getpid()) // #nosec G115
+	for range 10 {
 		info, ok := procs[pid]
 		if !ok {
 			break

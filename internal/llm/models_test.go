@@ -127,7 +127,7 @@ func TestFetchOpenRouterModels_WithAuthHeader(t *testing.T) {
 		if auth := r.Header.Get("Authorization"); auth != "Bearer sk-or-test" {
 			t.Errorf("auth = %q, want %q", auth, "Bearer sk-or-test")
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []map[string]interface{}{
 				{"id": "anthropic/claude-3.5-sonnet", "name": "Claude"},
 			},
@@ -161,7 +161,7 @@ func TestFetchOpenRouterModels_DecodeError(t *testing.T) {
 
 func TestFetchOpenRouterModels_EmptyPrefixModel(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []map[string]interface{}{
 				{"id": "/some-model", "name": "Empty Prefix"},
 			},
@@ -199,7 +199,7 @@ func TestFetchOpenAIModels_DecodeError(t *testing.T) {
 
 func TestFetchOpenAIModels_NoGPTModels(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		json.NewEncoder(w).Encode(map[string]interface{}{
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
 			"data": []map[string]interface{}{
 				{"id": "dall-e-3", "created": 1},
 				{"id": "text-embedding-3-small", "created": 2},

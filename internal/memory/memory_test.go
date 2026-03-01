@@ -10,6 +10,7 @@ func setupTestDir(t *testing.T) {
 	t.Helper()
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 	// Ensure the config dir exists
 	if err := os.MkdirAll(filepath.Join(dir, ".ai-cli"), 0o700); err != nil {
 		t.Fatal(err)

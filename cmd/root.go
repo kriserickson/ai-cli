@@ -18,6 +18,8 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
+const windows = "windows"
+
 var debugFlag string
 
 var rootCmd = &cobra.Command{

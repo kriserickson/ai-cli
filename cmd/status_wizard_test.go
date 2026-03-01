@@ -33,8 +33,12 @@ func TestRunStatus_LoadError(t *testing.T) {
 
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".ai-cli")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	err := runStatus(nil, nil)
 	if err == nil {
@@ -221,8 +225,12 @@ func TestRunSetModel_LoadError(t *testing.T) {
 	// Corrupt the config file
 	home, _ := os.UserHomeDir()
 	dir := filepath.Join(home, ".ai-cli")
-	os.MkdirAll(dir, 0o700)
-	os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	err := runSetModel(nil, nil)
 	if err == nil {
