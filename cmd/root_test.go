@@ -302,7 +302,9 @@ func TestRunRootSingleShot_LocalProvider(t *testing.T) {
 			"response": `{"type":"commands","commands":[]}`,
 			"done":     true,
 		}
-		_ = json.NewEncoder(w).Encode(ollamaResp)
+		if err := json.NewEncoder(w).Encode(ollamaResp); err != nil {
+			t.Fatalf("Encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
