@@ -7,11 +7,7 @@
       "Bash(./ai.exe:*)",
       "Bash(go get:*)",
       "Bash(go tool cover -func=coverage.out 2>&1)",
-      "Bash(cd /c/Projects/go/ai-cli && go test -coverprofile=cmd_cov.out ./cmd/ && go tool cover -func=cmd_cov.out 2>&1)",
-      "Bash(cd /c/Projects/go/ai-cli && go test -coverprofile=llm_cov.out ./internal/llm/ && go tool cover -func=llm_cov.out 2>&1)",
-      "Bash(cd /c/Projects/go/ai-cli && go test -coverprofile=cmd_cov.out ./cmd/ && go tool cover -func=cmd_cov.out | grep -v \"100.0%\" 2>&1)",
-      "Bash(echo done:*)",
-      "Bash(cd /c/Projects/go/ai-cli && go tool cover -func=cmd_cov.out | tail -1 2>&1)"
+      "Bash(echo done:*)"      
     ]
   }
 }
