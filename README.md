@@ -213,7 +213,7 @@ Memories let you store named context (like server addresses, port mappings, or p
 ### Managing memories
 
 ```sh
-ai memory add my-server "kris@137.184.10.103 always port-forward 9229 to 2229"
+ai memory add my-server "user@10.1.1.103 -L 9229:localhost:2229"
 ai memory add staging-db "postgres://app:secret@staging.example.com:5432/mydb"
 ai memory list
 ai memory remove my-server
@@ -225,7 +225,7 @@ Once stored, just use the keyword naturally:
 
 ```sh
 ai connect to my-server
-# → ssh -L 2229:localhost:9229 kris@137.184.10.103
+# → ssh user@10.1.1.103 -L 9229:localhost:2229
 
 ai dump the users table from staging-db
 # → pg_dump -t users "postgres://app:secret@staging.example.com:5432/mydb"
@@ -236,7 +236,7 @@ Keyword matching is case-insensitive. Multiple memories can match in a single re
 In interactive mode, the same commands are available:
 
 ```text
-ai> memory add my-server kris@137.184.10.103 always port-forward 9229 to 2229
+ai> memory add my-server "user@10.1.1.103 -L 9229:localhost:2229"
 ai> memory list
 ai> memory remove my-server
 ```
