@@ -268,6 +268,17 @@ func TestExecListMemories_ParseError(t *testing.T) {
 }
 
 func TestExecute_ProcessAndNetworkTools(t *testing.T) {
+	if runtime.GOOS == windowsOS {
+		t.Skip("PATH-based command stubs are Unix-specific")
+	}
+
+	dir := t.TempDir()
+	writeFakeCommand(t, dir, "ps", "#!/bin/sh\necho 'fake process list'\n")
+	writeFakeCommand(t, dir, "top", "#!/bin/sh\necho 'fake system resources'\n")
+	writeFakeCommand(t, dir, "netstat", "#!/bin/sh\necho 'fake network connections'\n")
+	writeFakeCommand(t, dir, "ping", "#!/bin/sh\necho 'fake ping output'\n")
+	t.Setenv("PATH", dir)
+
 	tests := []struct {
 		name string
 		tool string
@@ -282,10 +293,10 @@ func TestExecute_ProcessAndNetworkTools(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			output, err := Execute(tt.tool, tt.args, shell.Info{})
-			if err != nil && output != "" {
-				t.Fatalf("Execute(%s) returned both output and error: %v", tt.tool, err)
+			if err != nil {
+				t.Fatalf("Execute(%s) error: %v", tt.tool, err)
 			}
-			if err == nil && output == "" {
+			if output == "" {
 				t.Fatalf("Execute(%s) returned empty output", tt.tool)
 			}
 		})
