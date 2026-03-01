@@ -42,6 +42,9 @@ var sensitiveEnvKeys = []string{
 	"CREDENTIAL",
 	"AUTH",
 	"PRIVATE",
+	"DATABASE",
+	"DB",
+	"DSN",
 }
 
 // ValidatePath resolves path to an absolute path and checks that it is
