@@ -213,7 +213,7 @@ Memories let you store named context (like server addresses, port mappings, or p
 ### Managing memories
 
 ```sh
-ai memory add my-server "kris@137.184.10.103 always port-forward 9229 to 2229"
+ai memory add my-server "user@10.1.1.103 always port-forward 9229 to 2229"
 ai memory add staging-db "postgres://app:secret@staging.example.com:5432/mydb"
 ai memory list
 ai memory remove my-server
