@@ -62,7 +62,7 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 
 	fmt.Printf("AI CLI %s — interactive mode. Type 'help' for commands or 'exit' to quit.\n", version)
 
-	toolsEnabled := cfg.Safety.ToolCalling != "never"
+	toolsEnabled := cfg.Safety.ToolCalling != config.ToolCallingNever
 	systemPrompt := replBuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "", toolsEnabled)
 
 	for {
