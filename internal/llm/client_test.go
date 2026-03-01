@@ -4,11 +4,86 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/kriserickson/ai-cli/internal/config"
 )
+
+func TestDebugWriter_Screen(t *testing.T) {
+	w, cleanup, err := DebugWriter("screen")
+	if err != nil {
+		t.Fatalf("DebugWriter(screen) error: %v", err)
+	}
+	defer cleanup()
+	if w == nil {
+		t.Fatal("DebugWriter(screen) returned nil writer")
+	}
+}
+
+func TestDebugWriter_File(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	// Ensure config dir exists
+	configDir, _ := config.Dir()
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+
+	w, cleanup, err := DebugWriter("file")
+	if err != nil {
+		t.Fatalf("DebugWriter(file) error: %v", err)
+	}
+	defer cleanup()
+	if w == nil {
+		t.Fatal("DebugWriter(file) returned nil writer")
+	}
+
+	// Write something and verify
+	_, err = w.Write([]byte("test log entry\n"))
+	if err != nil {
+		t.Fatalf("Write error: %v", err)
+	}
+}
+
+func TestDebugWriter_None(t *testing.T) {
+	w, cleanup, err := DebugWriter("none")
+	if err != nil {
+		t.Fatalf("DebugWriter(none) error: %v", err)
+	}
+	defer cleanup()
+	if w != nil {
+		t.Fatal("DebugWriter(none) should return nil writer")
+	}
+}
+
+func TestDebugWriter_Default(t *testing.T) {
+	w, cleanup, err := DebugWriter("")
+	if err != nil {
+		t.Fatalf("DebugWriter('') error: %v", err)
+	}
+	defer cleanup()
+	if w != nil {
+		t.Fatal("DebugWriter('') should return nil writer")
+	}
+}
+
+func TestNewClient_OpenRouterProvider(t *testing.T) {
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "openrouter"
+	cfg.Provider.OpenRouter.APIKey = "sk-or-test"
+
+	client, err := NewClient(cfg, nil)
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+	if client == nil {
+		t.Fatal("NewClient returned nil client")
+	}
+}
 
 func TestNewClient_MissingAPIKey(t *testing.T) {
 	cfg := config.DefaultConfig()
@@ -174,5 +249,76 @@ func TestChat_EmptyChoices(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no response") {
 		t.Errorf("error = %q, want mention of no response", err.Error())
+	}
+}
+
+func TestChat_APIErrorInBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		chatResp := ChatResponse{
+			Error: &APIError{Message: "rate limit exceeded"},
+		}
+		if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "openai"
+	cfg.Provider.OpenAI.APIKey = "test-key"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+
+	client, _ := NewClient(cfg, nil)
+	_, err := client.Chat("sys", "test")
+	if err == nil {
+		t.Fatal("expected error for API error in body")
+	}
+	if !strings.Contains(err.Error(), "rate limit exceeded") {
+		t.Errorf("error = %q, want it to mention rate limit", err.Error())
+	}
+}
+
+func TestChat_InvalidJSONResponse(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("not json at all"))
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "openai"
+	cfg.Provider.OpenAI.APIKey = "test-key"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+
+	client, _ := NewClient(cfg, nil)
+	_, err := client.Chat("sys", "test")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON response")
+	}
+	if !strings.Contains(err.Error(), "parse response") {
+		t.Errorf("error = %q, want parse response error", err.Error())
+	}
+}
+
+func TestChat_InvalidLLMResponseJSON(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		chatResp := ChatResponse{
+			Choices: []Choice{{Message: Message{Content: "not valid json"}}},
+		}
+		_ = json.NewEncoder(w).Encode(chatResp)
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "openai"
+	cfg.Provider.OpenAI.APIKey = "test-key"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+
+	client, _ := NewClient(cfg, nil)
+	_, err := client.Chat("sys", "test")
+	if err == nil {
+		t.Fatal("expected error for invalid LLM response JSON")
+	}
+	if !strings.Contains(err.Error(), "failed to parse LLM response") {
+		t.Errorf("error = %q, want LLM parse error", err.Error())
 	}
 }

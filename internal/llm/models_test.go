@@ -122,6 +122,101 @@ func TestFetchOpenAIModels_HTTPError(t *testing.T) {
 	}
 }
 
+func TestFetchOpenRouterModels_WithAuthHeader(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if auth := r.Header.Get("Authorization"); auth != "Bearer sk-or-test" {
+			t.Errorf("auth = %q, want %q", auth, "Bearer sk-or-test")
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "anthropic/claude-3.5-sonnet", "name": "Claude"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchOpenRouterModels(server.URL, "sk-or-test")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("len(models) = %d, want 1", len(models))
+	}
+}
+
+func TestFetchOpenRouterModels_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	_, err := FetchOpenRouterModels(server.URL, "")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "decode OpenRouter models") {
+		t.Errorf("error = %q, want decode error", err.Error())
+	}
+}
+
+func TestFetchOpenRouterModels_EmptyPrefixModel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "/some-model", "name": "Empty Prefix"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchOpenRouterModels(server.URL, "")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(models) != 1 {
+		t.Fatalf("len(models) = %d, want 1", len(models))
+	}
+	// Empty prefix should stay as "Other" since prefix is empty
+	if models[0].Company != "Other" {
+		t.Errorf("company = %q, want %q", models[0].Company, "Other")
+	}
+}
+
+func TestFetchOpenAIModels_DecodeError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("not json"))
+	}))
+	defer server.Close()
+
+	_, err := FetchOpenAIModels(server.URL, "test-key")
+	if err == nil {
+		t.Fatal("expected error for invalid JSON")
+	}
+	if !strings.Contains(err.Error(), "decode OpenAI models") {
+		t.Errorf("error = %q, want decode error", err.Error())
+	}
+}
+
+func TestFetchOpenAIModels_NoGPTModels(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"data": []map[string]interface{}{
+				{"id": "dall-e-3", "created": 1},
+				{"id": "text-embedding-3-small", "created": 2},
+			},
+		})
+	}))
+	defer server.Close()
+
+	models, err := FetchOpenAIModels(server.URL, "test-key")
+	if err != nil {
+		t.Fatalf("error: %v", err)
+	}
+	if len(models) != 0 {
+		t.Errorf("len(models) = %d, want 0 (no gpt- models)", len(models))
+	}
+}
+
 func TestGroupByCompany(t *testing.T) {
 	models := []ModelInfo{
 		{ID: "anthropic/claude-3.5-sonnet", Name: "Claude 3.5 Sonnet", Company: "Anthropic"},

@@ -463,47 +463,5 @@ task test
 task test:verbose
 task test:pkg PKG=./internal/executor/...
 task test:pkg PKG=./internal/llm/...
-task test:pkg PKG=./internal/config/...
-task test:pkg PKG=./internal/shell/...
-```
-
-### Project Structure
-
-```text
-ai-cli/
-├── main.go
-├── go.mod
-├── cmd/
-│   ├── root.go
-│   ├── config.go
-│   ├── memory.go
-│   ├── version.go
-│   ├── status.go
-│   ├── doctor.go
-│   ├── setmodel.go
-│   └── wizard.go
-└── internal/
-    ├── config/
-    │   ├── config.go            # TOML config load/save/defaults (~/.ai-cli/config.toml)
-    │   └── config_test.go
-    ├── llm/
-    │   ├── client.go            # LLM HTTP client (OpenAI-compatible), debug logging
-    │   ├── client_test.go
-    │   ├── models.go            # Model-list fetching (OpenRouter + OpenAI), GroupByCompany
-    │   ├── models_test.go
-    │   ├── prompt.go            # System prompt template with OS/shell/cwd context
-    │   ├── prompt_test.go
-    │   ├── parse_test.go
-    │   └── types.go             # JSON request/response structs
-    ├── executor/
-    │   ├── executor.go          # Sequential command execution with colored output
-    │   ├── safety.go            # allowlist check + risk/certainty safety matrix
-    │   └── safety_test.go
-    ├── memory/
-    │   ├── memory.go            # Memory CRUD + keyword matching (~/.ai-cli/memory.json)
-    │   └── memory_test.go
-    ├── shell/
-    │   ├── detect.go            # OS, shell, version detection
-    │   └── detect_test.go
-    └── interactive/
+task test:coverage
 ```

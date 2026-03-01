@@ -62,6 +62,47 @@ func TestRunRootSingleShot_UnexpectedResponseType(t *testing.T) {
 	}
 }
 
+func TestRunRootSingleShot_DebugFromConfig(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"commands\",\"commands\":[]}"}}]}`))
+	}))
+	defer server.Close()
+
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.Model = "gpt-4o-mini"
+	cfg.Provider.OpenAI.APIKey = "sk-test"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+	cfg.Debug = "screen" // Set debug in config
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("config.Save: %v", err)
+	}
+
+	debugFlag = ""
+
+	if err := runRoot(nil, []string{"hello"}); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+}
+
+func TestRunRootSingleShot_WithDebugFlag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"commands\",\"commands\":[]}"}}]}`))
+	}))
+	defer server.Close()
+
+	saveRootConfig(t, server.URL)
+	debugFlag = "screen"
+	defer func() { debugFlag = "" }()
+
+	if err := runRoot(nil, []string{"say", "hello"}); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+}
+
 func TestRunRootSingleShot_ConfigResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -316,6 +316,116 @@ func TestRunModelWizard(t *testing.T) {
 		}
 	})
 
+	t.Run("pick provider error propagates", func(t *testing.T) {
+		stubWizardHooks(t)
+		wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
+			return errors.New("user canceled")
+		}
+
+		cfg := config.DefaultConfig()
+		err := RunModelWizard(cfg)
+		if err == nil {
+			t.Fatal("RunModelWizard() error = nil, want error")
+		}
+		if !strings.Contains(err.Error(), "user canceled") {
+			t.Fatalf("RunModelWizard() error = %q, want user canceled", err.Error())
+		}
+	})
+
+	t.Run("ensure API key error propagates", func(t *testing.T) {
+		stubWizardHooks(t)
+		call := 0
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			switch call {
+			case 0: // provider
+				*(response.(*int)) = 0 // OpenAI
+			case 1: // API key prompt
+				return errors.New("key prompt failed")
+			}
+			call++
+			return nil
+		}
+
+		cfg := config.DefaultConfig()
+		cfg.Provider.OpenAI.APIKey = "" // force API key prompt
+		err := RunModelWizard(cfg)
+		if err == nil {
+			t.Fatal("RunModelWizard() error = nil, want error")
+		}
+		if !strings.Contains(err.Error(), "key prompt failed") {
+			t.Fatalf("RunModelWizard() error = %q, want key prompt error", err.Error())
+		}
+	})
+
+	t.Run("pick model error propagates", func(t *testing.T) {
+		stubWizardHooks(t)
+		call := 0
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			if call == 0 {
+				*(response.(*int)) = 0 // OpenAI
+			}
+			call++
+			return nil
+		}
+		wizardFetchOpenAIModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+			return nil, errors.New("network error")
+		}
+
+		cfg := config.DefaultConfig()
+		cfg.Provider.OpenAI.APIKey = "sk-existing"
+		err := RunModelWizard(cfg)
+		if err == nil {
+			t.Fatal("RunModelWizard() error = nil, want error")
+		}
+		if !strings.Contains(err.Error(), "fetch models") {
+			t.Fatalf("RunModelWizard() error = %q, want fetch error", err.Error())
+		}
+	})
+
+	t.Run("success openrouter with new key", func(t *testing.T) {
+		stubWizardHooks(t)
+		call := 0
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			switch call {
+			case 0: // provider
+				*(response.(*int)) = 1 // OpenRouter
+			case 1: // API key (since it's missing)
+				*(response.(*string)) = "sk-new-or-key"
+			case 2: // company select
+				*(response.(*int)) = 0
+			case 3: // model select
+				*(response.(*int)) = 0
+			}
+			call++
+			return nil
+		}
+		wizardFetchORModels = func(_ string, _ string) ([]llm.ModelInfo, error) {
+			return []llm.ModelInfo{
+				{ID: "anthropic/claude-3.5-sonnet", Name: "Claude 3.5 Sonnet", Company: "Anthropic"},
+			}, nil
+		}
+		saved := false
+		wizardSaveConfig = func(cfg *config.Config) error {
+			saved = true
+			if cfg.Provider.Default != config.ProviderOpenRouter {
+				t.Fatalf("saved provider = %q, want openrouter", cfg.Provider.Default)
+			}
+			if cfg.Provider.OpenRouter.APIKey != "sk-new-or-key" {
+				t.Fatalf("saved API key = %q, want sk-new-or-key", cfg.Provider.OpenRouter.APIKey)
+			}
+			return nil
+		}
+
+		cfg := config.DefaultConfig()
+		cfg.Provider.OpenRouter.APIKey = "" // force API key prompt
+		if err := RunModelWizard(cfg); err != nil {
+			t.Fatalf("RunModelWizard() error = %v", err)
+		}
+		if !saved {
+			t.Fatal("RunModelWizard() did not call save")
+		}
+	})
+
 	t.Run("save error propagates", func(t *testing.T) {
 		stubWizardHooks(t)
 		call := 0

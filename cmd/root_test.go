@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -31,6 +32,28 @@ func withCmdStdin(t *testing.T, input string, fn func()) {
 	fn()
 }
 
+func TestRunRoot_LoadError(t *testing.T) {
+	tempHome(t)
+	debugFlag = ""
+
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".ai-cli")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.toml"), []byte("{{invalid"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runRoot(nil, []string{"test"})
+	if err == nil {
+		t.Fatal("runRoot() error = nil, want config load error")
+	}
+	if !strings.Contains(err.Error(), "failed to load config") {
+		t.Fatalf("error = %q, want failed to load config", err.Error())
+	}
+}
+
 func TestRunRootReturnsNoAPIKeyError(t *testing.T) {
 	tempHome(t)
 	debugFlag = ""
@@ -54,6 +77,37 @@ func TestRunRootSingleShotReturnsNoAPIKeyError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no API key configured") {
 		t.Fatalf("runRoot() error = %q, want missing API key error", err.Error())
+	}
+}
+
+func TestHandleConfig_DefaultApply(t *testing.T) {
+	// Test that pressing Enter (empty input) applies the config change
+	tempHome(t)
+	cfg := config.DefaultConfig()
+
+	withCmdStdin(t, "\n", func() {
+		if err := handleConfig(&llm.Response{Action: "set_model", Value: "gpt-4o"}, cfg); err != nil {
+			t.Fatalf("handleConfig() error: %v", err)
+		}
+	})
+
+	if cfg.Provider.Model != "gpt-4o" {
+		t.Fatalf("model = %q, want %q", cfg.Provider.Model, "gpt-4o")
+	}
+}
+
+func TestHandleConfig_YesApply(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+
+	withCmdStdin(t, "yes\n", func() {
+		if err := handleConfig(&llm.Response{Action: "set_model", Value: "gpt-4o"}, cfg); err != nil {
+			t.Fatalf("handleConfig() error: %v", err)
+		}
+	})
+
+	if cfg.Provider.Model != "gpt-4o" {
+		t.Fatalf("model = %q, want %q", cfg.Provider.Model, "gpt-4o")
 	}
 }
 
