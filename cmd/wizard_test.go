@@ -18,12 +18,14 @@ func stubWizardHooks(t *testing.T) {
 	origAskOne := wizardAskOne
 	origFetchAI := wizardFetchOpenAIModels
 	origFetchOR := wizardFetchORModels
+	origFetchLocal := wizardFetchLocalModels
 	origSave := wizardSaveConfig
 
 	t.Cleanup(func() {
 		wizardAskOne = origAskOne
 		wizardFetchOpenAIModels = origFetchAI
 		wizardFetchORModels = origFetchOR
+		wizardFetchLocalModels = origFetchLocal
 		wizardSaveConfig = origSave
 	})
 }
@@ -270,6 +272,83 @@ func TestPickModel_SuccessPaths(t *testing.T) {
 			t.Fatalf("pickModel() = %q, want anthropic model", got)
 		}
 	})
+	t.Run("local", func(t *testing.T) {
+		stubWizardHooks(t)
+		wizardFetchLocalModels = func(baseURL string) ([]llm.ModelInfo, error) {
+			if baseURL != "http://localhost:11434/api/generate" {
+				t.Fatalf("unexpected baseURL: %q", baseURL)
+			}
+			return []llm.ModelInfo{
+				{ID: "llama3", Name: "llama3"},
+			}, nil
+		}
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			*(response.(*int)) = 0
+			return nil
+		}
+
+		cfg := config.DefaultConfig()
+		got, err := pickModel(cfg, config.ProviderLocal)
+		if err != nil {
+			t.Fatalf("pickModel() error = %v", err)
+		}
+		if got != "llama3" {
+			t.Fatalf("pickModel() = %q, want %q", got, "llama3")
+		}
+	})
+}
+
+func TestPromptLocalBaseURL(t *testing.T) {
+	t.Run("accepts default", func(t *testing.T) {
+		stubWizardHooks(t)
+		wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			inp, ok := p.(*survey.Input)
+			if !ok {
+				t.Fatalf("prompt type = %T, want *survey.Input", p)
+			}
+			if inp.Default != "http://localhost:11434/api/generate" {
+				t.Fatalf("default = %q", inp.Default)
+			}
+			*(response.(*string)) = inp.Default
+			return nil
+		}
+
+		got, err := promptLocalBaseURL("http://localhost:11434/api/generate")
+		if err != nil {
+			t.Fatalf("promptLocalBaseURL() error = %v", err)
+		}
+		if got != "http://localhost:11434/api/generate" {
+			t.Fatalf("promptLocalBaseURL() = %q", got)
+		}
+	})
+
+	t.Run("custom url", func(t *testing.T) {
+		stubWizardHooks(t)
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			*(response.(*string)) = "http://myhost:11434/api/generate"
+			return nil
+		}
+
+		got, err := promptLocalBaseURL("http://localhost:11434/api/generate")
+		if err != nil {
+			t.Fatalf("promptLocalBaseURL() error = %v", err)
+		}
+		if got != "http://myhost:11434/api/generate" {
+			t.Fatalf("promptLocalBaseURL() = %q, want custom url", got)
+		}
+	})
+
+	t.Run("error", func(t *testing.T) {
+		stubWizardHooks(t)
+		wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
+			return errors.New("canceled")
+		}
+
+		_, err := promptLocalBaseURL("http://localhost:11434/api/generate")
+		if err == nil {
+			t.Fatal("promptLocalBaseURL() error = nil, want error")
+		}
+	})
 }
 
 func TestRunModelWizard(t *testing.T) {
@@ -423,6 +502,78 @@ func TestRunModelWizard(t *testing.T) {
 		}
 		if !saved {
 			t.Fatal("RunModelWizard() did not call save")
+		}
+	})
+
+	t.Run("success local with custom url", func(t *testing.T) {
+		stubWizardHooks(t)
+		call := 0
+		wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			switch call {
+			case 0: // provider
+				*(response.(*int)) = 2 // Local
+			case 1: // base URL prompt
+				if _, ok := p.(*survey.Input); !ok {
+					t.Fatalf("call 1 prompt type = %T, want *survey.Input", p)
+				}
+				*(response.(*string)) = "http://remotehost:11434/api/generate"
+			case 2: // model
+				*(response.(*int)) = 0
+			default:
+				t.Fatalf("unexpected prompt call %d", call)
+			}
+			call++
+			return nil
+		}
+		wizardFetchLocalModels = func(baseURL string) ([]llm.ModelInfo, error) {
+			if baseURL != "http://remotehost:11434/api/generate" {
+				t.Fatalf("fetch called with baseURL = %q, want custom url", baseURL)
+			}
+			return []llm.ModelInfo{{ID: "llama3", Name: "llama3"}}, nil
+		}
+		saved := false
+		wizardSaveConfig = func(cfg *config.Config) error {
+			saved = true
+			if cfg.Provider.Default != config.ProviderLocal {
+				t.Fatalf("saved provider = %q, want local", cfg.Provider.Default)
+			}
+			if cfg.Provider.Local.BaseURL != "http://remotehost:11434/api/generate" {
+				t.Fatalf("saved base URL = %q", cfg.Provider.Local.BaseURL)
+			}
+			if cfg.Provider.Model != "llama3" {
+				t.Fatalf("saved model = %q", cfg.Provider.Model)
+			}
+			return nil
+		}
+
+		cfg := config.DefaultConfig()
+		if err := RunModelWizard(cfg); err != nil {
+			t.Fatalf("RunModelWizard() error = %v", err)
+		}
+		if !saved {
+			t.Fatal("RunModelWizard() did not call save")
+		}
+	})
+
+	t.Run("local base URL prompt error propagates", func(t *testing.T) {
+		stubWizardHooks(t)
+		call := 0
+		wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+			if call == 0 {
+				*(response.(*int)) = 2 // Local
+				call++
+				return nil
+			}
+			return errors.New("url prompt failed")
+		}
+
+		cfg := config.DefaultConfig()
+		err := RunModelWizard(cfg)
+		if err == nil {
+			t.Fatal("RunModelWizard() error = nil, want error")
+		}
+		if !strings.Contains(err.Error(), "url prompt failed") {
+			t.Fatalf("RunModelWizard() error = %q, want url prompt error", err.Error())
 		}
 	})
 
