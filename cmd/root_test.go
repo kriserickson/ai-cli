@@ -101,7 +101,7 @@ func TestRunRoot_InteractiveMode_ConfigRunShow(t *testing.T) {
 	t.Cleanup(func() { interactiveRun = origRun })
 
 	var capturedCmds interactive.BuiltinCommands
-	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		capturedCmds = cmds
 		return nil
 	}
@@ -160,7 +160,7 @@ func TestRunRoot_InteractiveMode_MemoryRun(t *testing.T) {
 	t.Cleanup(func() { interactiveRun = origRun })
 
 	var capturedCmds interactive.BuiltinCommands
-	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		capturedCmds = cmds
 		return nil
 	}
@@ -219,7 +219,7 @@ func TestRunRoot_InteractiveMode_StatusDoctorSetModel(t *testing.T) {
 	t.Cleanup(func() { interactiveRun = origRun })
 
 	var capturedCmds interactive.BuiltinCommands
-	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		capturedCmds = cmds
 		return nil
 	}
@@ -253,7 +253,7 @@ func TestRunRoot_InteractiveError(t *testing.T) {
 	origRun := interactiveRun
 	t.Cleanup(func() { interactiveRun = origRun })
 
-	interactiveRun = func(_ string, _ interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, _ interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		return errors.New("interactive failed")
 	}
 

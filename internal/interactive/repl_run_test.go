@@ -93,7 +93,7 @@ func TestRun_ConfigDirError(t *testing.T) {
 	err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
 		t.Fatal("client.Chat should not be called")
 		return nil, nil
-	}}, shell.Info{})
+	}}, shell.Info{}, false)
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
@@ -112,7 +112,7 @@ func TestRun_ReadlineInitError(t *testing.T) {
 	err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
 		t.Fatal("client.Chat should not be called")
 		return nil, nil
-	}}, shell.Info{})
+	}}, shell.Info{}, false)
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
@@ -141,7 +141,7 @@ func TestRun_ExitOnEOFAndInterrupt(t *testing.T) {
 				err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
 					t.Fatal("client.Chat should not be called")
 					return nil, nil
-				}}, shell.Info{})
+				}}, shell.Info{}, false)
 				if err != nil {
 					t.Fatalf("Run() error = %v, want nil", err)
 				}
@@ -166,7 +166,7 @@ func TestRun_ReadlineUnexpectedError(t *testing.T) {
 	err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
 		t.Fatal("client.Chat should not be called")
 		return nil, nil
-	}}, shell.Info{})
+	}}, shell.Info{}, false)
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
@@ -198,13 +198,13 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
 
 	var promptArgs []string
-	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string) string {
+	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, explain bool) string {
 		promptArgs = []string{osName, shellName, shellVersion, cwd}
 		return "system-prompt"
 	}
 
 	var handled []*llm.Response
-	replHandleResponse = func(resp *llm.Response, _ *config.Config, info shell.Info) error {
+	replHandleResponse = func(resp *llm.Response, _ *config.Config, info shell.Info, _ bool) error {
 		if info.Shell != "powershell" {
 			t.Fatalf("shellInfo not passed through: %+v", info)
 		}
@@ -246,7 +246,7 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 		OS:      "windows/amd64",
 		Shell:   "powershell",
 		Version: "7.5.0",
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -291,10 +291,10 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 		},
 	}
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
-	replBuildSystemPrompt = func(_, _, _, _ string) string { return "sys" }
+	replBuildSystemPrompt = func(_, _, _, _ string, _ bool) string { return "sys" }
 
 	handleCalls := 0
-	replHandleResponse = func(_ *llm.Response, _ *config.Config, _ shell.Info) error {
+	replHandleResponse = func(_ *llm.Response, _ *config.Config, _ shell.Info, _ bool) error {
 		handleCalls++
 		return errors.New("handle failed")
 	}
@@ -318,7 +318,7 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 	}
 
 	out := captureOutput(t, func() {
-		if err := Run("dev", cmds, testCfg(t), client, shell.Info{}); err != nil {
+		if err := Run("dev", cmds, testCfg(t), client, shell.Info{}, false); err != nil {
 			t.Fatalf("Run() error = %v, want nil", err)
 		}
 	})

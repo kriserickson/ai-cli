@@ -25,8 +25,8 @@ type replLineReader interface {
 var (
 	replConfigDir         = config.Dir
 	replNewReadline       = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
-	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string) string {
-		return llm.BuildSystemPrompt(osName, shellName, shellVersion, cwd, false)
+	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, explain bool) string {
+		return llm.BuildSystemPrompt(osName, shellName, shellVersion, cwd, explain)
 	}
 	replHandleResponse = handleResponse
 )
@@ -44,7 +44,7 @@ type BuiltinCommands struct {
 	MemoryRun func(args []string) error
 }
 
-func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
+func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Client, shellInfo shell.Info, explain bool) error {
 	configDir, err := replConfigDir()
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 
 	fmt.Printf("AI CLI %s — interactive mode. Type 'help' for commands or 'exit' to quit.\n", version)
 
-	systemPrompt := replBuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "")
+	systemPrompt := replBuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "", explain)
 
 	for {
 		line, err := rl.Readline()
@@ -138,7 +138,7 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 				color.Red("Error: %v", err)
 				continue
 			}
-			if err := replHandleResponse(resp, cfg, shellInfo); err != nil {
+			if err := replHandleResponse(resp, cfg, shellInfo, explain); err != nil {
 				color.Red("Error: %v", err)
 			}
 		}
@@ -165,10 +165,10 @@ func printHelp() {
 	fmt.Println()
 }
 
-func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info) error {
+func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info, explain bool) error {
 	switch resp.Type {
 	case "commands":
-		return executor.Run(resp.Commands, cfg, shellInfo, false)
+		return executor.Run(resp.Commands, cfg, shellInfo, explain)
 	case "config":
 		return applyConfig(resp, cfg)
 	default:

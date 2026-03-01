@@ -45,7 +45,7 @@ func TestPrintHelp(_ *testing.T) {
 }
 
 func TestHandleResponseCommands(t *testing.T) {
-	err := handleResponse(&llm.Response{Type: "commands"}, testCfg(t), shell.Info{Shell: "cmd"})
+	err := handleResponse(&llm.Response{Type: "commands"}, testCfg(t), shell.Info{Shell: "cmd"}, false)
 	if err != nil {
 		t.Fatalf("handleResponse(commands) error = %v", err)
 	}
@@ -61,7 +61,7 @@ func TestHandleResponseConfig(t *testing.T) {
 	}
 
 	withStdin(t, "y\n", func() {
-		if err := handleResponse(resp, cfg, shell.Info{}); err != nil {
+		if err := handleResponse(resp, cfg, shell.Info{}, false); err != nil {
 			t.Fatalf("handleResponse(config) error = %v", err)
 		}
 	})
@@ -72,7 +72,7 @@ func TestHandleResponseConfig(t *testing.T) {
 }
 
 func TestHandleResponseUnknownType(t *testing.T) {
-	err := handleResponse(&llm.Response{Type: "mystery"}, testCfg(t), shell.Info{})
+	err := handleResponse(&llm.Response{Type: "mystery"}, testCfg(t), shell.Info{}, false)
 	if err == nil {
 		t.Fatal("handleResponse() error = nil, want error")
 	}
