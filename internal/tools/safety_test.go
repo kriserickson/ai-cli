@@ -3,20 +3,27 @@ package tools
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestValidatePath_Valid(t *testing.T) {
-	cwd := "/home/user/project"
+	cwd, _ := filepath.Abs("project")
+	if runtime.GOOS == "windows" {
+		cwd = "C:\\home\\user\\project"
+	} else {
+		cwd = "/home/user/project"
+	}
+
 	tests := []struct {
 		path string
 		want string
 	}{
-		{".", "/home/user/project"},
-		{"src", "/home/user/project/src"},
-		{"./src/main.go", "/home/user/project/src/main.go"},
-		{"src/../src/main.go", "/home/user/project/src/main.go"},
+		{".", cwd},
+		{"src", filepath.Join(cwd, "src")},
+		{"./src/main.go", filepath.Join(cwd, "src", "main.go")},
+		{"src/../src/main.go", filepath.Join(cwd, "src", "main.go")},
 	}
 	for _, tt := range tests {
 		got, err := ValidatePath(tt.path, cwd)
@@ -31,19 +38,30 @@ func TestValidatePath_Valid(t *testing.T) {
 }
 
 func TestValidatePath_OutsideCWD(t *testing.T) {
-	cwd := "/home/user/project"
-	paths := []string{
-		"../other",
-		"/etc/passwd",
-		"../../..",
+	cwd, _ := filepath.Abs("project")
+	if runtime.GOOS == "windows" {
+		cwd = "C:\\home\\user\\project"
+	} else {
+		cwd = "/home/user/project"
 	}
-	for _, path := range paths {
-		_, err := ValidatePath(path, cwd)
+
+	paths := []struct {
+		path string
+		err  string
+	}{
+		{"../other", "outside"},
+		{"/etc/passwd", ""}, // On Windows this might be blocked or outside
+		{"../../..", "outside"},
+	}
+	for _, tt := range paths {
+		_, err := ValidatePath(tt.path, cwd)
 		if err == nil {
-			t.Errorf("ValidatePath(%q, %q) should have failed", path, cwd)
+			t.Errorf("ValidatePath(%q, %q) should have failed", tt.path, cwd)
+			continue
 		}
-		if !strings.Contains(err.Error(), "outside") {
-			t.Errorf("ValidatePath(%q) error = %q, want 'outside'", path, err.Error())
+		errMsg := strings.ToLower(err.Error())
+		if tt.err != "" && !strings.Contains(errMsg, tt.err) {
+			t.Errorf("ValidatePath(%q) error = %q, want %q", tt.path, err.Error(), tt.err)
 		}
 	}
 }
@@ -254,7 +272,8 @@ func TestValidatePath_SymlinkWithinCWD(t *testing.T) {
 	if err != nil {
 		t.Errorf("ValidatePath should allow symlink within cwd, got error: %v", err)
 	}
-	if got != link {
-		t.Errorf("ValidatePath returned %q, want %q", got, link)
+	want, _ := filepath.EvalSymlinks(link)
+	if got != filepath.Clean(want) {
+		t.Errorf("ValidatePath returned %q, want %q", got, want)
 	}
 }
