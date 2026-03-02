@@ -8,7 +8,9 @@
       "Bash(go get:*)",
       "Bash(go tool cover -func=coverage.out 2>&1)",
       "Bash(echo done:*)",
-      "Bash(go:*)"
+      "Bash(go:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(gofumpt:*)"
     ]
   }
 }

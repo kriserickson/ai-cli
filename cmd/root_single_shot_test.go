@@ -39,6 +39,7 @@ func TestRunRootSingleShot_CommandsResponse(t *testing.T) {
 
 	saveRootConfig(t, server.URL)
 	debugFlag = ""
+	explainFlag = false
 
 	if err := runRoot(nil, []string{"say", "hello"}); err != nil {
 		t.Fatalf("runRoot() error: %v", err)
@@ -54,6 +55,7 @@ func TestRunRootSingleShot_UnexpectedResponseType(t *testing.T) {
 
 	saveRootConfig(t, server.URL)
 	debugFlag = ""
+	explainFlag = false
 
 	err := runRoot(nil, []string{"test"})
 	if err == nil {
@@ -146,4 +148,21 @@ func TestRunRootSingleShot_ConfigResponse(t *testing.T) {
 			t.Fatalf("runRoot() error: %v", err)
 		}
 	})
+}
+
+func TestRunRootSingleShot_WithExplainFlag(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"commands\",\"commands\":[{\"command\":\"echo hello\",\"description\":\"say hello\",\"risk\":\"safe\",\"certainty\":99,\"explanation\":\"Prints hello to stdout.\"}]}"}}]}`))
+	}))
+	defer server.Close()
+
+	saveRootConfig(t, server.URL)
+	debugFlag = ""
+	explainFlag = true
+	defer func() { explainFlag = false }()
+
+	if err := runRoot(nil, []string{"say", "hello"}); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
 }

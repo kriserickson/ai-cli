@@ -1,6 +1,8 @@
 package executor
 
 import (
+	"bytes"
+	"io"
 	"os"
 	"runtime"
 	"strings"
@@ -86,7 +88,7 @@ func TestRunSkipsWhenConfirmationDeclined(t *testing.T) {
 	}}
 
 	withTestStdin(t, "n\n", func() {
-		if err := Run(cmds, cfg, testShellInfo()); err != nil {
+		if err := Run(cmds, cfg, testShellInfo(), false); err != nil {
 			t.Fatalf("Run() error = %v, want nil when skipped", err)
 		}
 	})
@@ -104,7 +106,7 @@ func TestRunExecutesAndReturnsWrappedError(t *testing.T) {
 		Certainty:   100,
 	}}
 
-	err := Run(cmds, cfg, testShellInfo())
+	err := Run(cmds, cfg, testShellInfo(), false)
 	if err == nil {
 		t.Fatal("Run() error = nil, want wrapped error")
 	}
@@ -122,7 +124,78 @@ func TestRunExecutesSafeCommandWithoutConfirmation(t *testing.T) {
 		Certainty:   100,
 	}}
 
-	if err := Run(cmds, cfg, testShellInfo()); err != nil {
+	if err := Run(cmds, cfg, testShellInfo(), false); err != nil {
 		t.Fatalf("Run() error = %v, want nil", err)
+	}
+}
+
+func TestRunWithExplainTrue(t *testing.T) {
+	cfg := defaultSafetyCfg()
+	cmds := []llm.Command{{
+		Command:     "echo explain-test",
+		Description: "echo with explanation",
+		Risk:        "safe",
+		Certainty:   100,
+		Explanation: "Prints the text 'explain-test' to stdout.",
+	}}
+
+	// Capture stdout to verify explanation is printed
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	runErr := Run(cmds, cfg, testShellInfo(), true)
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+
+	if runErr != nil {
+		t.Fatalf("Run() error = %v, want nil", runErr)
+	}
+	output := buf.String()
+	if !strings.Contains(output, "explain-test") {
+		t.Errorf("output missing explanation text:\n%s", output)
+	}
+}
+
+func TestRunWithExplainFalse(t *testing.T) {
+	cfg := defaultSafetyCfg()
+	cmds := []llm.Command{{
+		Command:     "echo no-explain",
+		Description: "echo without explanation display",
+		Risk:        "safe",
+		Certainty:   100,
+		Explanation: "This should NOT appear in output.",
+	}}
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	runErr := Run(cmds, cfg, testShellInfo(), false)
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+
+	if runErr != nil {
+		t.Fatalf("Run() error = %v, want nil", runErr)
+	}
+	output := buf.String()
+	if strings.Contains(output, "This should NOT appear") {
+		t.Errorf("output should not contain explanation when explain=false:\n%s", output)
 	}
 }
