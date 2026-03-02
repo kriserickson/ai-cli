@@ -3,19 +3,15 @@ package tools
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestValidatePath_Valid(t *testing.T) {
-	var cwd string
-	if runtime.GOOS == "windows" {
-		cwd = "C:\\home\\user\\project"
-	} else {
-		cwd = "/home/user/project"
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
 	}
-
 	tests := []struct {
 		path string
 		want string
@@ -38,30 +34,27 @@ func TestValidatePath_Valid(t *testing.T) {
 }
 
 func TestValidatePath_OutsideCWD(t *testing.T) {
-	var cwd string
-	if runtime.GOOS == "windows" {
-		cwd = "C:\\home\\user\\project"
-	} else {
-		cwd = "/home/user/project"
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	paths := []struct {
+	tests := []struct {
 		path string
 		err  string
 	}{
 		{"../other", "outside"},
-		{"/etc/passwd", ""}, // On Windows this might be blocked or outside
+		{"/etc/passwd", "outside"}, // On Windows this might be blocked or outside
 		{"../../..", "outside"},
 	}
-	for _, tt := range paths {
+	for _, tt := range tests {
 		_, err := ValidatePath(tt.path, cwd)
 		if err == nil {
 			t.Errorf("ValidatePath(%q, %q) should have failed", tt.path, cwd)
 			continue
 		}
-		errMsg := strings.ToLower(err.Error())
-		if tt.err != "" && !strings.Contains(errMsg, tt.err) {
-			t.Errorf("ValidatePath(%q) error = %q, want %q", tt.path, err.Error(), tt.err)
+		if err != nil && !strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "blocked") {
+			t.Errorf("ValidatePath(%q) error = %q, want 'outside' or 'blocked'", tt.path, err.Error())
 		}
 	}
 }

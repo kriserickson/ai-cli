@@ -175,8 +175,12 @@ func TestExecute_Environment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute error: %v", err)
 	}
-	if output == "" {
-		t.Error("expected non-empty environment output")
+
+	// The environment can be large and might be truncated.
+	// We check for our variables anywhere in the output.
+	if !strings.Contains(output, "TEST_SAFE_VAR=visible") {
+		t.Logf("Environment output: %s", output)
+		t.Error("expected safe var to be visible")
 	}
 	// Sensitive values must never appear in the raw form
 	if strings.Contains(output, "should_be_hidden") {

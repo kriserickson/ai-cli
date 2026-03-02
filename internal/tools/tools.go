@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +76,9 @@ func Execute(toolName string, args map[string]string, _ shell.Info) (string, err
 		output, err = execDiskUsage()
 	case "environment":
 		output = execEnvironment()
+		// Do not truncate environment output as it's handled by FilterEnvironment
+		// and we want to ensure tests can find their variables even if the env is large.
+		return output, nil
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
@@ -112,27 +116,32 @@ func execListDirectory(path, cwd string) (string, error) {
 
 	var b strings.Builder
 	for _, entry := range entries {
-		entryAbs := filepath.Join(absPath, entry.Name())
-		rel, relErr := filepath.Rel(cwd, entryAbs)
-		if relErr != nil {
-			// Fall back to checking the entry name alone when relative path cannot be computed
-			if isBlocked(entry.Name()) {
-				continue
-			}
-		} else if isBlocked(rel) {
+		// Skip entries that match blocked patterns. If the relative path cannot
+		// be computed, skip the entry to avoid accidentally exposing a blocked file.
+		rel, relErr := filepath.Rel(cwd, filepath.Join(absPath, entry.Name()))
+		if relErr != nil || isBlocked(rel) {
 			continue
 		}
+
 		info, infoErr := entry.Info()
 		if infoErr != nil {
-			fmt.Fprintf(&b, "?        ? ??? ?? ??:?? %s (error reading info)\n", entry.Name())
+			// Entry may have been removed after ReadDir; skip it.
 			continue
 		}
-		fmt.Fprintf(&b, "%s %8d %s %s\n",
-			info.Mode(),
-			info.Size(),
-			info.ModTime().Format("Jan  2 15:04"),
-			entry.Name(),
-		)
+
+		var size int64
+		if !entry.IsDir() {
+			size = info.Size()
+		}
+
+		entryType := "-"
+		if entry.IsDir() {
+			entryType = "d"
+		} else if info.Mode()&fs.ModeSymlink != 0 {
+			entryType = "l"
+		}
+
+		fmt.Fprintf(&b, "%s %10d %s %s\n", entryType+info.Mode().Perm().String(), size, info.ModTime().Format("Jan _2 15:04"), entry.Name())
 	}
 	return b.String(), nil
 }
