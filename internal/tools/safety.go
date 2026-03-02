@@ -96,6 +96,26 @@ func ValidatePath(path, cwd string) (string, error) {
 		return "", fmt.Errorf("access to %q is blocked for security", path)
 	}
 
+	// Resolve symlinks and re-validate the resolved path to prevent symlink
+	// attacks where a path within cwd points to a target outside cwd or
+	// matching a blocked pattern (e.g. safe.txt -> /etc/passwd).
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
+		resolvedClean := filepath.Clean(resolved)
+		if resolvedClean != cwdClean && !strings.HasPrefix(resolvedClean, cwdClean+string(os.PathSeparator)) {
+			return "", fmt.Errorf("path %q resolves outside the working directory", path)
+		}
+		resolvedRel, relErr := filepath.Rel(cwdClean, resolvedClean)
+		if relErr != nil {
+			return "", fmt.Errorf("cannot compute relative path for resolved symlink: %w", relErr)
+		}
+		if isBlocked(resolvedRel) {
+			return "", fmt.Errorf("access to %q is blocked for security", path)
+		}
+	}
+	// If EvalSymlinks fails (e.g. path does not exist yet), the lexical
+	// checks above are sufficient and we fall through.
+
 	return abs, nil
 }
 
