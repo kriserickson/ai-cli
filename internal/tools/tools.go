@@ -309,7 +309,7 @@ func execCheckCommand(command string) (string, error) {
 
 	path, err := exec.LookPath(command)
 	if err != nil {
-		return "", fmt.Errorf("%s: %w", command, err)
+		return "", fmt.Errorf("%s: not found: %w", command, err)
 	}
 
 	return path, nil
