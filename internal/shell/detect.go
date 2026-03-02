@@ -10,6 +10,7 @@ import (
 
 const (
 	shellPowershell = "powershell"
+	shellPwsh       = "pwsh"
 	shellWindows    = "windows"
 	shellUnknown    = "unknown"
 )
@@ -81,7 +82,7 @@ func detectShellVersion(shell string) string {
 	switch base {
 	case "bash", "zsh", "fish":
 		cmd = exec.CommandContext(context.Background(), shell, "--version")
-	case shellPowershell, "pwsh":
+	case shellPowershell, shellPwsh:
 		cmd = exec.CommandContext(context.Background(), shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
 	default:
 		return shellUnknown
@@ -110,7 +111,7 @@ func shellBaseName(shell string) string {
 func Command(shell string) (bin string, args []string) {
 	base := shellBaseName(shell)
 	switch base {
-	case shellPowershell, "pwsh":
+	case shellPowershell, shellPwsh:
 		return shell, []string{"-Command"}
 	case "cmd":
 		return shell, []string{"/c"}
