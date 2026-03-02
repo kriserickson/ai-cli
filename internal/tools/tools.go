@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -325,6 +326,7 @@ func execDiskUsage() (string, error) {
 
 func execEnvironment() string {
 	vars := os.Environ()
+	sort.Strings(vars)
 	filtered := FilterEnvironment(vars)
 	return strings.Join(filtered, "\n")
 }
@@ -333,5 +335,11 @@ func truncateOutput(s string) string {
 	if len(s) <= maxOutputBytes {
 		return s
 	}
+
+	lastNewline := strings.LastIndex(s[:maxOutputBytes], "\n")
+	if lastNewline > maxOutputBytes/2 {
+		return s[:lastNewline] + "\n... [output truncated]"
+	}
+
 	return s[:maxOutputBytes] + "\n... [output truncated]"
 }
