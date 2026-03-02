@@ -230,4 +230,3 @@ func TestDetectShellVersion_Branches(t *testing.T) {
 		}
 	}
 }
-
