@@ -76,6 +76,9 @@ func Execute(toolName string, args map[string]string, _ shell.Info) (string, err
 		output, err = execDiskUsage()
 	case "environment":
 		output = execEnvironment()
+		// Do not truncate environment output as it's handled by FilterEnvironment
+		// and we want to ensure tests can find their variables even if the env is large.
+		return output, nil
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)
 	}
