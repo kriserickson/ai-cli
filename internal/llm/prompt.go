@@ -109,7 +109,7 @@ Available tools:
 - ping: Check host connectivity (3 packets). Args: host
 - check_command: Check if a command is installed. Args: command
 - disk_usage: Show disk space usage. No args.
-- environment: Show environment variables (sensitive values masked). No args.
+- environment: Show environment variable names and only a safe subset of values. No args.
 
 Rules for tools:
 - Use tools ONLY when you need information to generate better commands

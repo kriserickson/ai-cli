@@ -47,6 +47,34 @@ var sensitiveEnvKeys = []string{
 	"DSN",
 }
 
+// safeEnvValueKeys lists environment variable names whose values are useful for
+// command generation and generally non-secret. Unknown keys are shown by name
+// only to avoid leaking poorly named secrets.
+var safeEnvValueKeys = map[string]struct{}{
+	"COLORTERM":    {},
+	"COMPUTERNAME": {},
+	"COMSPEC":      {},
+	"EDITOR":       {},
+	"HOME":         {},
+	"HOSTNAME":     {},
+	"LANG":         {},
+	"NO_COLOR":     {},
+	"OS":           {},
+	"PATH":         {},
+	"PATHEXT":      {},
+	"PWD":          {},
+	"SHELL":        {},
+	"SYSTEMROOT":   {},
+	"TEMP":         {},
+	"TERM":         {},
+	"TMP":          {},
+	"TZ":           {},
+	"USER":         {},
+	"USERNAME":     {},
+	"VISUAL":       {},
+	"WINDIR":       {},
+}
+
 // ValidatePath resolves path to an absolute path and checks that it is
 // contained within cwd and does not match any blocked pattern.
 // It also resolves symlinks and re-validates the resolved path to prevent
@@ -159,8 +187,9 @@ func isBlocked(relPath string) bool {
 	return false
 }
 
-// FilterEnvironment takes a list of "KEY=VALUE" strings and returns
-// a filtered copy where sensitive values are replaced with [REDACTED].
+// FilterEnvironment takes a list of "KEY=VALUE" strings and returns a filtered
+// copy where only a safe allowlist of values is shown. Sensitive values are
+// replaced with [REDACTED]; all other values are hidden as [VALUE HIDDEN].
 func FilterEnvironment(vars []string) []string {
 	result := make([]string, 0, len(vars))
 	for _, v := range vars {
@@ -172,10 +201,17 @@ func FilterEnvironment(vars []string) []string {
 		value := parts[1]
 
 		upperKey := strings.ToUpper(key)
+		valueShown := false
 		for _, sensitive := range sensitiveEnvKeys {
 			if strings.Contains(upperKey, sensitive) {
 				value = "[REDACTED]"
+				valueShown = true
 				break
+			}
+		}
+		if !valueShown {
+			if _, ok := safeEnvValueKeys[upperKey]; !ok {
+				value = "[VALUE HIDDEN]"
 			}
 		}
 		result = append(result, key+"="+value)

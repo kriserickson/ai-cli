@@ -118,3 +118,27 @@ func TestApplyConfigReturnsApplyActionError(t *testing.T) {
 		}
 	})
 }
+
+func TestApplyConfig_RedactsDisplayedKeyValue(t *testing.T) {
+	cfg := testCfg(t)
+	resp := &llm.Response{
+		Action: "set_key",
+		Key:    "llm_key",
+		Value:  "sk-super-secret-1234",
+	}
+
+	out := captureOutput(t, func() {
+		withStdin(t, "n\n", func() {
+			if err := applyConfig(resp, cfg); err != nil {
+				t.Fatalf("applyConfig() error = %v", err)
+			}
+		})
+	})
+
+	if strings.Contains(out, "sk-super-secret-1234") {
+		t.Fatalf("applyConfig leaked raw key in output: %q", out)
+	}
+	if !strings.Contains(out, config.RedactSecret("sk-super-secret-1234")) {
+		t.Fatalf("applyConfig should show masked key in output: %q", out)
+	}
+}

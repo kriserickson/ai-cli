@@ -25,9 +25,10 @@ const (
 )
 
 type Config struct {
-	Provider ProviderConfig `toml:"provider"`
-	Safety   SafetyConfig   `toml:"safety"`
-	Debug    string         `toml:"debug"` // "none", "screen", or "file"
+	Provider         ProviderConfig `toml:"provider"`
+	Safety           SafetyConfig   `toml:"safety"`
+	Debug            string         `toml:"debug"`              // "none", "screen", or "file"
+	DebugLogPayloads bool           `toml:"debug_log_payloads"` // Only used for debug=file
 }
 
 type ProviderConfig struct {
@@ -81,7 +82,8 @@ func DefaultConfig() *Config {
 			MinCertainty:      80,
 			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
 		},
-		Debug: DebugNone,
+		Debug:            DebugNone,
+		DebugLogPayloads: false,
 	}
 }
 

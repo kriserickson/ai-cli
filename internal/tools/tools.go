@@ -42,7 +42,7 @@ var Registry = []ToolDef{
 	{Name: "ping", Description: "Check host connectivity (3 packets)", Args: []string{"host"}},
 	{Name: "check_command", Description: "Check if a command is installed", Args: []string{"command"}},
 	{Name: "disk_usage", Description: "Show disk space usage", Args: nil},
-	{Name: "environment", Description: "Show environment variables (sensitive values masked)", Args: nil},
+	{Name: "environment", Description: "Show environment variable names and only a safe subset of values", Args: nil},
 }
 
 // Execute runs the named tool with the given args and returns its output.
@@ -77,8 +77,8 @@ func Execute(toolName string, args map[string]string, _ shell.Info) (string, err
 		output, err = execDiskUsage()
 	case "environment":
 		output = execEnvironment()
-		// Do not truncate environment output as it's handled by FilterEnvironment
-		// and we want to ensure tests can find their variables even if the env is large.
+		// Do not truncate environment output; values are already hidden by
+		// default and callers may need to inspect the full variable list.
 		return output, nil
 	default:
 		return "", fmt.Errorf("unknown tool: %s", toolName)

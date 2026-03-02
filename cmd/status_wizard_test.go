@@ -59,7 +59,7 @@ func TestRunStatus_NoLog_APIKeyMissing(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "Shell:", "API Key:"} {
+	for _, want := range []string{"Config:", "Log:", "not created yet", "Provider: openrouter", "Model:    anthropic/test-model", "Debug:    none", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
@@ -91,7 +91,7 @@ func TestRunStatus_LogExists_APIKeyPresent(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "Shell:", "API Key:"} {
+	for _, want := range []string{"Log:", "exists", "Provider: openai", "Model:    gpt-4o-mini", "Debug:    none", "Shell:", "API Key:"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("runStatus output missing %q\n%s", want, out)
 		}
@@ -216,6 +216,26 @@ func TestRunStatus_OpenAIWithAPIKey(t *testing.T) {
 	}
 	if !strings.Contains(out, "Model:    gpt-4o") {
 		t.Fatalf("expected Model: gpt-4o\n%s", out)
+	}
+}
+
+func TestRunStatus_DebugFileMetadataOnly(t *testing.T) {
+	saveCmdConfig(t, func(cfg *config.Config) {
+		cfg.Debug = config.DebugFile
+		cfg.DebugLogPayloads = false
+	})
+
+	out := captureStdout(t, func() {
+		if err := runStatus(nil, nil); err != nil {
+			t.Fatalf("runStatus() error: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "Debug:    file") {
+		t.Fatalf("expected debug file mode\n%s", out)
+	}
+	if !strings.Contains(out, "Log Data: metadata only") {
+		t.Fatalf("expected metadata-only log mode\n%s", out)
 	}
 }
 
