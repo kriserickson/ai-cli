@@ -196,6 +196,7 @@ To customize allowlist prefixes, edit `~/.ai-cli/config.toml`:
 ```toml
 [safety]
 always_confirm = false
+tool_calling = "never"
 min_certainty = 80
 allowlist_prefixes = ["git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"]
 ```
@@ -206,6 +207,33 @@ After editing, run:
 ai status
 ```
 
+## Tool Calling
+
+AI CLI can optionally let the model use built-in read-only tools before it generates shell commands. This is controlled by `safety.tool_calling`.
+
+| Mode | Description |
+|------|-------------|
+| `never` | Tools are fully disabled. No tool instructions are added to the prompt and no tool loop runs. Default. |
+| `always_prompt` | Prompt before every tool call. |
+| `dangerous_prompt` | Auto-approve safe tool calls, but prompt when a tool triggers a safety rule. |
+| `always_allow` | Execute all tool calls without prompting. |
+
+Set it with:
+
+```sh
+ai config set tool_calling never
+ai config set tool_calling always_prompt
+ai config set tool_calling dangerous_prompt
+ai config set tool_calling always_allow
+```
+
+Notes:
+
+- `tool_calling` only controls AI tool usage
+- generated shell commands still follow `always_confirm`, `min_certainty`, risk classification, and the allowlist
+- `dangerous_prompt` only prompts when a tool call hits a safety rule, such as trying to read a restricted path
+- `never` makes AI CLI skip the tool loop entirely and respond directly
+
 ## Memories
 
 Memories let you store named context (like server addresses, port mappings, or project conventions) that automatically gets injected into the AI prompt when the keyword appears in your input.
@@ -213,7 +241,7 @@ Memories let you store named context (like server addresses, port mappings, or p
 ### Managing memories
 
 ```sh
-ai memory add my-server "kris@137.184.10.103 always port-forward 9229 to 2229"
+ai memory add my-server "user@10.1.1.103 -L 9229:localhost:2229"
 ai memory add staging-db "postgres://app:secret@staging.example.com:5432/mydb"
 ai memory list
 ai memory remove my-server
@@ -225,7 +253,7 @@ Once stored, just use the keyword naturally:
 
 ```sh
 ai connect to my-server
-# → ssh -L 2229:localhost:9229 kris@137.184.10.103
+# → ssh user@10.1.1.103 -L 9229:localhost:2229
 
 ai dump the users table from staging-db
 # → pg_dump -t users "postgres://app:secret@staging.example.com:5432/mydb"
@@ -236,7 +264,7 @@ Keyword matching is case-insensitive. Multiple memories can match in a single re
 In interactive mode, the same commands are available:
 
 ```text
-ai> memory add my-server kris@137.184.10.103 always port-forward 9229 to 2229
+ai> memory add my-server "user@10.1.1.103 -L 9229:localhost:2229"
 ai> memory list
 ai> memory remove my-server
 ```
@@ -349,6 +377,7 @@ Available `ai config get/set` keys:
 | `llm_key` | API key for the current provider | (empty) |
 | `llm_url` | Base URL for the current provider | (provider default) |
 | `always_confirm` | Always prompt before execution (`true`/`false`) | `false` |
+| `tool_calling` | Tool usage mode (`never`, `always_prompt`, `dangerous_prompt`, `always_allow`) | `never` |
 | `min_certainty` | Auto-execute threshold (0-100) | `80` |
 | `debug` | Debug mode (`none`, `screen`, `file`) | `none` |
 

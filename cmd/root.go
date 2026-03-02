@@ -16,6 +16,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
+	"github.com/kriserickson/ai-cli/internal/tools"
 )
 
 const windows = "windows"
@@ -180,7 +181,6 @@ func runRoot(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
-
 	toolsEnabled := cfg.Safety.ToolCalling != config.ToolCallingNever
 	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd, explainFlag, toolsEnabled)
 
@@ -197,7 +197,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	resp, err := client.Chat(systemPrompt, instruction)
+	resp, err := tools.RunWithTools(client, systemPrompt, instruction, cfg, shellInfo, 3)
 	if err != nil {
 		return err
 	}

@@ -156,11 +156,14 @@ func TestExecute_CheckCommand(t *testing.T) {
 
 func TestExecute_CheckCommand_NotFound(t *testing.T) {
 	output, err := Execute("check_command", map[string]string{"command": "nonexistent_command_xyz"}, shell.Info{})
-	if err != nil {
-		t.Fatalf("Execute error: %v", err)
+	if err == nil {
+		t.Fatal("expected error for nonexistent command, got nil")
 	}
-	if output == "" {
-		t.Errorf("expected some output for nonexistent command, got empty string")
+	if !strings.Contains(err.Error(), "not found") {
+		t.Errorf("expected 'not found' in error, got: %v", err)
+	}
+	if output != "" {
+		t.Errorf("expected empty output for nonexistent command, got: %q", output)
 	}
 }
 
@@ -173,18 +176,26 @@ func TestExecute_Environment(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 
-	// In CI, many environment variables might exist causing truncation.
-	// Since "environment" tool sorts by however os.Environ() returns them (usually unsorted or alphabetical),
-	// and we added them recently, they should be present, but if truncation happens they might be lost.
-	// We'll check if truncation happened and if so, we'll be more lenient or use a more targeted test.
-
-	if !strings.Contains(output, "TEST_SAFE_VAR=visible") && !strings.Contains(output, "[output truncated]") {
+	// The environment can be large and might be truncated.
+	// We check for our variables anywhere in the output.
+	if !strings.Contains(output, "TEST_SAFE_VAR=visible") {
+		t.Logf("Environment output: %s", output)
 		t.Error("expected safe var to be visible")
 	}
+	// Sensitive values must never appear in the raw form
 	if strings.Contains(output, "should_be_hidden") {
 		t.Error("expected API_KEY value to be redacted")
 	}
-	if !strings.Contains(output, "TEST_API_KEY=[REDACTED]") && !strings.Contains(output, "[output truncated]") {
+	// Test filtering logic directly with a controlled input (avoids output-truncation flakiness)
+	filtered := FilterEnvironment([]string{
+		"TEST_SAFE_VAR=visible",
+		"TEST_API_KEY=should_be_hidden",
+	})
+	filteredOut := strings.Join(filtered, "\n")
+	if !strings.Contains(filteredOut, "TEST_SAFE_VAR=visible") {
+		t.Error("expected safe var to be visible")
+	}
+	if !strings.Contains(filteredOut, "TEST_API_KEY=[REDACTED]") {
 		t.Error("expected API_KEY to show [REDACTED]")
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
+	"github.com/kriserickson/ai-cli/internal/tools"
 )
 
 type replLineReader interface {
@@ -25,8 +26,10 @@ type replLineReader interface {
 var (
 	replConfigDir         = config.Dir
 	replNewReadline       = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
-	replBuildSystemPrompt = llm.BuildSystemPrompt
-	replHandleResponse    = handleResponse
+	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, toolsEnabled bool) string {
+		return llm.BuildSystemPrompt(osName, shellName, shellVersion, cwd, false, toolsEnabled)
+	}
+	replHandleResponse = handleResponse
 )
 
 // BuiltinCommands holds handlers for built-in REPL commands so the interactive
@@ -131,8 +134,8 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 				}
 			}
 
-			// Send to LLM
-			resp, err := client.Chat(prompt, input)
+			// Send to LLM with tool support
+			resp, err := tools.RunWithTools(client, prompt, input, cfg, shellInfo, 3)
 			if err != nil {
 				color.Red("Error: %v", err)
 				continue

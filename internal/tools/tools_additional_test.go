@@ -119,6 +119,14 @@ func TestExecListDirectory_DefaultPath(t *testing.T) {
 	}
 }
 
+func TestExecListDirectory_NonExistent(t *testing.T) {
+	dir := t.TempDir()
+	_, err := execListDirectory("nonexistent", dir)
+	if err == nil {
+		t.Fatal("execListDirectory(nonexistent) error = nil, want error")
+	}
+}
+
 func TestExecListDirectory_BlockedEntriesFiltered(t *testing.T) {
 	dir := t.TempDir()
 	// Create a safe file and several blocked files/dirs

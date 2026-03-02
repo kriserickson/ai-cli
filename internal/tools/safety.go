@@ -69,7 +69,26 @@ func ValidatePath(path, cwd string) (string, error) {
 		return "", fmt.Errorf("path %q is outside the working directory", path)
 	}
 
-	// Check blocked patterns against the relative path
+	// Resolve symlinks so that a link inside cwd pointing outside is caught.
+	// If EvalSymlinks fails (e.g. the path does not exist yet), fall back to
+	// the lexically cleaned path: no symlink can exist for a non-existent path,
+	// so the lexical containment check above is sufficient in that case.
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		resolvedClean := filepath.Clean(resolved)
+		if resolvedClean != cwdClean && !strings.HasPrefix(resolvedClean, cwdClean+string(os.PathSeparator)) {
+			return "", fmt.Errorf("path %q is outside the working directory", path)
+		}
+		resolvedRel, relErr := filepath.Rel(cwdClean, resolvedClean)
+		if relErr != nil {
+			return "", fmt.Errorf("cannot compute relative path: %w", relErr)
+		}
+		if isBlocked(resolvedRel) {
+			return "", fmt.Errorf("access to %q is blocked for security", path)
+		}
+		return resolvedClean, nil
+	}
+
+	// Check blocked patterns against the lexical relative path
 	rel, err := filepath.Rel(cwdClean, abs)
 	if err != nil {
 		return "", fmt.Errorf("cannot compute relative path: %w", err)

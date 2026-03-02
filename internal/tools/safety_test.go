@@ -8,7 +8,10 @@ import (
 )
 
 func TestValidatePath_Valid(t *testing.T) {
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		path string
 		want string
@@ -31,20 +34,27 @@ func TestValidatePath_Valid(t *testing.T) {
 }
 
 func TestValidatePath_OutsideCWD(t *testing.T) {
-	cwd, _ := os.Getwd()
-	paths := []string{
-		"../other",
-		"/etc/passwd",
-		"../../..",
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, path := range paths {
-		_, err := ValidatePath(path, cwd)
+
+	tests := []struct {
+		path string
+		err  string
+	}{
+		{"../other", "outside"},
+		{"/etc/passwd", "outside"}, // On Windows this might be blocked or outside
+		{"../../..", "outside"},
+	}
+	for _, tt := range tests {
+		_, err := ValidatePath(tt.path, cwd)
 		if err == nil {
-			t.Errorf("ValidatePath(%q, %q) should have failed", path, cwd)
+			t.Errorf("ValidatePath(%q, %q) should have failed", tt.path, cwd)
 			continue
 		}
-		if !strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "blocked") {
-			t.Errorf("ValidatePath(%q) error = %q, want 'outside' or 'blocked'", path, err.Error())
+		if err != nil && !strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "blocked") {
+			t.Errorf("ValidatePath(%q) error = %q, want 'outside' or 'blocked'", tt.path, err.Error())
 		}
 	}
 }
@@ -96,6 +106,31 @@ func TestValidatePath_AllowedFiles(t *testing.T) {
 		if err != nil {
 			t.Errorf("ValidatePath(%q) should be allowed, got error: %v", path, err)
 		}
+	}
+}
+
+func TestValidatePath_Symlink(t *testing.T) {
+	// Create a temporary directory to act as cwd
+	cwd := t.TempDir()
+	// Create a file outside cwd
+	outside := t.TempDir()
+	secretFile := filepath.Join(outside, "secret.txt")
+	if err := os.WriteFile(secretFile, []byte("secret"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	// Create a symlink inside cwd pointing to the file outside cwd
+	symlink := filepath.Join(cwd, "link.txt")
+	if err := os.Symlink(secretFile, symlink); err != nil {
+		t.Fatalf("Symlink: %v", err)
+	}
+
+	_, err := ValidatePath("link.txt", cwd)
+	if err == nil {
+		t.Error("ValidatePath with symlink escaping cwd should have failed")
+	}
+	if err != nil && !strings.Contains(err.Error(), "outside") {
+		t.Errorf("expected 'outside' error, got: %v", err)
 	}
 }
 
@@ -230,7 +265,8 @@ func TestValidatePath_SymlinkWithinCWD(t *testing.T) {
 	if err != nil {
 		t.Errorf("ValidatePath should allow symlink within cwd, got error: %v", err)
 	}
-	if got != link {
-		t.Errorf("ValidatePath returned %q, want %q", got, link)
+	want, _ := filepath.EvalSymlinks(link)
+	if got != filepath.Clean(want) {
+		t.Errorf("ValidatePath returned %q, want %q", got, want)
 	}
 }
