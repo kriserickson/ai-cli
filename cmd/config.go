@@ -34,7 +34,7 @@ var configKeys = []string{
 var configKeyValues = map[string][]string{
 	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"always_confirm":              {"true", "false"},
-	"tool_calling": 			   {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
+	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
 	"debug":                       {config.DebugNone, config.DebugScreen, config.DebugFile},
 	"history_include_llm_output":  {"true", "false"},
 	"history_include_debug":       {"true", "false"},
