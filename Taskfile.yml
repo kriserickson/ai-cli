@@ -72,11 +72,6 @@ tasks:
     cmds:
       - go test -cover ./...
 
-  lint:
-    desc: Lint the Go code using golangci-lint
-    cmds:
-      - golangci-lint run ./...
-
   test:coverage:
     desc: Run all Go tests
     cmds:
@@ -100,7 +95,7 @@ tasks:
       PATH: '{{.GOPATH}}/bin:{{.PATH}}'
     cmds:
       - task: install:lint
-      - golangci-lint run
+      - golangci-lint run ./...
 
   lint:fix:
     desc: Run golangci-lint and fix issues
@@ -108,7 +103,7 @@ tasks:
       PATH: '{{.GOPATH}}/bin:{{.PATH}}'
     cmds:
       - task: install:lint
-      - golangci-lint run --fix
+      - golangci-lint run ./... --fix
 
   install:lint:
     desc: Install golangci-lint if missing

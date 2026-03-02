@@ -20,8 +20,7 @@ For shell command requests, respond with:
       "command": "the shell command to run",
       "description": "brief explanation of what it does",
       "risk": "safe or risky",
-      "certainty": 90,
-      "explanation": "(optional) step-by-step breakdown of the command's flags and arguments"
+      "certainty": 90
     }
   ]
 }
@@ -29,12 +28,12 @@ For shell command requests, respond with:
 Rules for commands:
 - "risk" must be "safe" (read-only, informational) or "risky" (modifies files, processes, system state)
 - "certainty" is 0-100, your confidence this is the correct command for what the user asked
-- "explanation" is optional and only required when explicitly requested
 - For multi-step tasks, return multiple commands in order. Use shell constructs like $(...) or pipes to chain when possible
 - Generate commands appropriate for the detected OS and shell
 - Never generate commands that could cause irreversible damage without clear user intent
 {{EXPLAIN_INSTRUCTION}}
 {{PLATFORM_HINTS}}
+{{TOOL_INSTRUCTIONS}}
 For requests to change AI CLI configuration (model, provider, API key, safety settings), respond with:
 {
   "type": "config",
@@ -65,6 +64,7 @@ This system uses BSD userland, NOT GNU coreutils. You MUST use BSD-compatible fl
 - tar: macOS ships bsdtar, NOT GNU tar. Do NOT use "--wildcards" or other GNU-specific flags.
 - find: "find -printf" is NOT available (GNU-only). Use "-print0 | xargs -0" or "-exec" instead.
 - awk: macOS ships BSD awk, NOT gawk. Do NOT use gawk features like "--csv" or "BEGINFILE/ENDFILE".
+- To update ai-cli via Homebrew: "brew upgrade ai-cli" (or "brew upgrade kriserickson/tap/ai-cli" if needed).
 `
 
 const linuxHints = `
@@ -74,6 +74,8 @@ This system uses GNU coreutils. Prefer GNU-specific flags when they are clearer:
 - sed: use "sed -i" for in-place editing (no extra argument needed unlike BSD sed).
 - date: GNU date supports "date -d" for date arithmetic.
 - grep: "grep -P" (PCRE) is available for advanced patterns.
+- To update ai-cli: download the latest release from GitHub using curl. Example:
+  VERSION=$(curl -s https://api.github.com/repos/kriserickson/ai-cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4) && ARCH=$(uname -m | sed 's/x86_64/amd64/') && curl -LO "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-linux-${ARCH}.tar.gz" && tar -xzf "ai-${VERSION}-linux-${ARCH}.tar.gz" && chmod +x ai && sudo mv ai /usr/local/bin/ai
 `
 
 const windowsHints = `
@@ -81,6 +83,38 @@ Platform-specific rules (Windows):
 - Use PowerShell cmdlets when the shell is powershell or pwsh.
 - For cmd.exe, use standard Windows commands (dir, type, tasklist, etc.).
 - Do NOT use Unix commands unless running under WSL or Git Bash.
+- To update ai-cli:
+  - If the shell is powershell or pwsh:
+    $VERSION = (Invoke-RestMethod "https://api.github.com/repos/kriserickson/ai-cli/releases/latest").tag_name; Invoke-WebRequest -Uri "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-windows-amd64.zip" -OutFile "ai-${VERSION}-windows-amd64.zip"; Expand-Archive -Path "ai-${VERSION}-windows-amd64.zip" -DestinationPath .\ai-update -Force; Move-Item .\ai-update\ai.exe (Get-Command ai).Source -Force; Remove-Item "ai-${VERSION}-windows-amd64.zip"; Remove-Item .\ai-update -Recurse
+  - If the shell is bash (Git Bash/MSYS2):
+    VERSION=$(curl -s https://api.github.com/repos/kriserickson/ai-cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4) && curl -LO "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-windows-amd64.zip" && unzip -o "ai-${VERSION}-windows-amd64.zip" -d ai-update && mv ai-update/ai.exe "$(which ai)" && rm -rf "ai-${VERSION}-windows-amd64.zip" ai-update
+`
+
+const toolInstructions = `You have access to read-only tools to gather information before generating commands.
+To use a tool, respond with:
+{
+  "type": "tool_request",
+  "tool": "tool_name",
+  "args": {"arg_name": "value"}
+}
+
+Available tools:
+- list_directory: List files in a directory. Args: path (default ".")
+- read_file: Read file contents (max 10KB, safety-checked). Args: path
+- command_help: Get help/man page for a command. Args: command
+- list_memories: List stored AI CLI memories. No args.
+- list_processes: List running processes. No args.
+- system_resources: Show top processes by CPU/memory. No args.
+- network_connections: Show active network connections. No args.
+- ping: Check host connectivity (3 packets). Args: host
+- check_command: Check if a command is installed. Args: command
+- disk_usage: Show disk space usage. No args.
+- environment: Show environment variables (sensitive values masked). No args.
+
+Rules for tools:
+- Use tools ONLY when you need information to generate better commands
+- Maximum 3 tool calls per request
+- After gathering information, respond with a "commands" or "config" response as usual
 `
 
 const explainInstruction = `
@@ -91,12 +125,17 @@ const explainInstruction = `
   - For "grep -rn 'TODO' --include='*.go' .": "Recursively searches all .go files in the current directory for lines containing 'TODO'. -r enables recursive search, -n shows line numbers, --include restricts to files matching the pattern."
 `
 
-func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain bool) string {
+func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain, toolsEnabled bool) string {
 	platformHints := buildPlatformHints(osInfo)
 
 	var explainText string
 	if explain {
 		explainText = explainInstruction
+	}
+
+	var toolText string
+	if toolsEnabled {
+		toolText = toolInstructions
 	}
 
 	r := strings.NewReplacer(
@@ -106,6 +145,7 @@ func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain bool) st
 		"{{CWD}}", cwd,
 		"{{PLATFORM_HINTS}}", platformHints,
 		"{{EXPLAIN_INSTRUCTION}}", explainText,
+		"{{TOOL_INSTRUCTIONS}}", toolText,
 	)
 
 	return r.Replace(promptTemplate)

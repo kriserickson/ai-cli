@@ -18,6 +18,7 @@ import (
 
 type Client interface {
 	Chat(systemPrompt, userMessage string) (*Response, error)
+	ChatMessages(messages []Message) (*Response, error)
 }
 
 // DebugWriter returns an io.Writer based on the debug mode string.
@@ -86,12 +87,16 @@ type openAIClient struct {
 }
 
 func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error) {
+	return c.ChatMessages([]Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userMessage},
+	})
+}
+
+func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 	req := ChatRequest{
-		Model: c.model,
-		Messages: []Message{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userMessage},
-		},
+		Model:    c.model,
+		Messages: messages,
 	}
 
 	body, err := json.Marshal(req)
@@ -173,10 +178,35 @@ type ollamaResponse struct {
 }
 
 func (c *ollamaClient) Chat(systemPrompt, userMessage string) (*Response, error) {
+	return c.ChatMessages([]Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userMessage},
+	})
+}
+
+func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
+	// Extract system and user messages for Ollama's generate API
+	var system, prompt string
+	for _, m := range messages {
+		switch m.Role {
+		case "system":
+			if system == "" {
+				system = m.Content
+			} else {
+				system += "\n" + m.Content
+			}
+		default:
+			if prompt != "" {
+				prompt += "\n"
+			}
+			prompt += m.Content
+		}
+	}
+
 	req := ollamaRequest{
 		Model:  c.model,
-		Prompt: userMessage,
-		System: systemPrompt,
+		Prompt: prompt,
+		System: system,
 		Stream: false,
 	}
 
