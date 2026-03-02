@@ -182,7 +182,7 @@ func TestValidatePath_SymlinkOutsideCWD(t *testing.T) {
 	defer os.RemoveAll(outside)
 
 	target := filepath.Join(outside, "secret.txt")
-	if err := os.WriteFile(target, []byte("secret"), 0600); err != nil {
+	if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -211,7 +211,7 @@ func TestValidatePath_SymlinkToBlockedFile(t *testing.T) {
 
 	// Create a blocked-pattern file inside cwd (e.g. id_rsa).
 	blocked := filepath.Join(cwd, "id_rsa")
-	if err := os.WriteFile(blocked, []byte("private key"), 0600); err != nil {
+	if err := os.WriteFile(blocked, []byte("private key"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -239,14 +239,14 @@ func TestValidatePath_SymlinkWithinCWD(t *testing.T) {
 	defer os.RemoveAll(cwd)
 
 	// Create a regular (non-blocked) file inside cwd.
-	real := filepath.Join(cwd, "main.go")
-	if err := os.WriteFile(real, []byte("package main"), 0600); err != nil {
+	mainFile := filepath.Join(cwd, "main.go")
+	if err := os.WriteFile(mainFile, []byte("package main"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a symlink inside cwd pointing to the file within cwd.
 	link := filepath.Join(cwd, "alias.go")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(mainFile, link); err != nil {
 		t.Skip("symlinks not supported:", err)
 	}
 
