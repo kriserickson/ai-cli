@@ -21,6 +21,7 @@ const (
 type Config struct {
 	Provider ProviderConfig `toml:"provider"`
 	Safety   SafetyConfig   `toml:"safety"`
+	History  HistoryConfig  `toml:"history"`
 	Debug    string         `toml:"debug"` // "none", "screen", or "file"
 }
 
@@ -44,6 +45,15 @@ type SafetyConfig struct {
 	WhitelistPrefixes []string `toml:"whitelist_prefixes,omitempty"` // Deprecated: use allowlist_prefixes
 }
 
+type HistoryConfig struct {
+	IncludeLLMOutput  bool `toml:"include_llm_output"`
+	IncludeDebug      bool `toml:"include_debug"`
+	AskOnError        bool `toml:"ask_on_error"`
+	AutoCheckOnError  bool `toml:"auto_check_on_error"`
+	RetryMaxAttempts  int  `toml:"retry_max_attempts"`
+	RetryContextDepth int  `toml:"retry_context_depth"`
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		Provider: ProviderConfig{
@@ -63,6 +73,14 @@ func DefaultConfig() *Config {
 			AlwaysConfirm:     false,
 			MinCertainty:      80,
 			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
+		},
+		History: HistoryConfig{
+			IncludeLLMOutput:  true,
+			IncludeDebug:      false,
+			AskOnError:        true,
+			AutoCheckOnError:  false,
+			RetryMaxAttempts:  1,
+			RetryContextDepth: 3,
 		},
 		Debug: DebugNone,
 	}

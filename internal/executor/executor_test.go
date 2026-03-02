@@ -66,13 +66,23 @@ func TestAskConfirmation(t *testing.T) {
 func TestExecute(t *testing.T) {
 	shellInfo := testShellInfo()
 
-	if err := execute("echo executor-test", shellInfo); err != nil {
-		t.Fatalf("execute() success case error = %v", err)
+	result := execute("echo executor-test", shellInfo)
+	if result.Err != nil {
+		t.Fatalf("execute() success case error = %v", result.Err)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("execute() exit code = %d, want 0", result.ExitCode)
+	}
+	if !strings.Contains(result.Stdout, "executor-test") {
+		t.Fatalf("execute() stdout = %q, want command output", result.Stdout)
 	}
 
-	err := execute("__ai_cli_missing_command_for_test__", shellInfo)
-	if err == nil {
-		t.Fatal("execute() error case returned nil, want error")
+	result = execute("__ai_cli_missing_command_for_test__", shellInfo)
+	if result.Err == nil {
+		t.Fatal("execute() error case returned nil error, want error")
+	}
+	if result.ExitCode == 0 {
+		t.Fatal("execute() error case exit code = 0, want non-zero")
 	}
 }
 

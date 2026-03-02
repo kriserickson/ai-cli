@@ -11,16 +11,21 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kriserickson/ai-cli/internal/config"
-	"github.com/kriserickson/ai-cli/internal/executor"
+	"github.com/kriserickson/ai-cli/internal/history"
 	"github.com/kriserickson/ai-cli/internal/interactive"
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/memory"
+	"github.com/kriserickson/ai-cli/internal/runner"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
 const windows = "windows"
 
-var debugFlag string
+var (
+	debugFlag        string
+	retryOnErrorFlag bool
+	retryDepthFlag   int
+)
 
 // interactiveRun is the entry point for interactive mode, stubbable for testing.
 var interactiveRun = interactive.Run
@@ -38,6 +43,8 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
+	rootCmd.Flags().BoolVar(&retryOnErrorFlag, "retry-on-error", false, "Automatically send failed commands back to the AI for one-shot retries")
+	rootCmd.Flags().IntVar(&retryDepthFlag, "retry-depth", 0, "Override how many recent command results are included in AI retry context")
 	// When --debug is given without a value, default to config.DebugScreen
 	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
 	// Allow flags to be interspersed with args
@@ -65,6 +72,12 @@ func runRoot(_ *cobra.Command, args []string) error {
 	if debugFlag != "" {
 		debugMode = debugFlag
 	}
+	if retryOnErrorFlag {
+		cfg.History.AutoCheckOnError = true
+	}
+	if retryDepthFlag > 0 {
+		cfg.History.RetryContextDepth = retryDepthFlag
+	}
 
 	debugOut, closeDebug, err := llm.DebugWriter(debugMode)
 	if err != nil {
@@ -80,6 +93,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
+		instructionRunner := runner.New(cfg, client, shellInfo)
 		cmds := interactive.BuiltinCommands{
 			Status: func() error {
 				return runStatus(nil, nil)
@@ -160,8 +174,39 @@ func runRoot(_ *cobra.Command, args []string) error {
 				}
 				return nil
 			},
+			HistoryRun: func(args []string) error {
+				if len(args) == 0 {
+					return listHistory(historyVerbose, historyCount)
+				}
+				switch args[0] {
+				case "list":
+					return listHistory(historyVerbose, historyCount)
+				case "show":
+					if len(args) < 2 {
+						return errors.New("history show requires an id argument")
+					}
+					return showHistory(args[1])
+				case "remove":
+					if len(args) < 2 {
+						return errors.New("history remove requires an id argument")
+					}
+					if err := history.Remove(args[1]); err != nil {
+						return err
+					}
+					fmt.Printf("History session %q removed.\n", args[1])
+					return nil
+				case "clear":
+					if err := history.Clear(); err != nil {
+						return err
+					}
+					fmt.Println("History cleared.")
+					return nil
+				default:
+					return fmt.Errorf("unknown history subcommand: %s\nUsage: history list | history show <id> | history remove <id> | history clear", args[0])
+				}
+			},
 		}
-		return interactiveRun(Version, cmds, cfg, client, shellInfo)
+		return interactiveRun(Version, cmds, instructionRunner)
 	}
 
 	// Single-shot mode
@@ -171,39 +216,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-
-	cwd, err := os.Getwd()
-	if err != nil {
-		return fmt.Errorf("failed to get working directory: %w", err)
-	}
-	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd)
-
-	// Inject matching memories into the system prompt
-	entries, err := memory.Load()
-	if err == nil {
-		matches := memory.FindMatching(instruction, entries)
-		if len(matches) > 0 {
-			contexts := make([]llm.MemoryContext, len(matches))
-			for i, m := range matches {
-				contexts[i] = llm.MemoryContext{Keyword: m.Keyword, Content: m.Content}
-			}
-			systemPrompt = llm.AppendMemories(systemPrompt, contexts)
-		}
-	}
-
-	resp, err := client.Chat(systemPrompt, instruction)
-	if err != nil {
-		return err
-	}
-
-	switch resp.Type {
-	case "commands":
-		return executor.Run(resp.Commands, cfg, shellInfo)
-	case "config":
-		return handleConfig(resp, cfg)
-	default:
-		return fmt.Errorf("unexpected response type: %s", resp.Type)
-	}
+	return runner.New(cfg, client, shellInfo).RunInstruction(instruction)
 }
 
 func handleConfig(resp *llm.Response, cfg *config.Config) error {

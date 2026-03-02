@@ -1,6 +1,8 @@
 package shell
 
 import (
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -134,5 +136,105 @@ func TestDetectShellVersion_Branches(t *testing.T) {
 		if got != "unknown" && strings.TrimSpace(got) == "" {
 			t.Fatalf("detectShellVersion(pwsh) returned empty non-unknown value")
 		}
+	}
+}
+
+func TestDetectWindowsShellBranches(t *testing.T) {
+	oldParent := detectParentShellProcess
+	oldPreferred := detectPreferredPowershell
+	t.Cleanup(func() {
+		detectParentShellProcess = oldParent
+		detectPreferredPowershell = oldPreferred
+	})
+
+	t.Run("git bash with windows shell path", func(t *testing.T) {
+		t.Setenv("MSYSTEM", "MINGW64")
+		t.Setenv("BASH_VERSION", "")
+		t.Setenv("SHELL", `C:\Program Files\Git\bin\bash.exe`)
+		if got := detectWindowsShell(); got != `C:\Program Files\Git\bin\bash.exe` {
+			t.Fatalf("detectWindowsShell() = %q", got)
+		}
+	})
+
+	t.Run("git bash with msys shell path", func(t *testing.T) {
+		t.Setenv("MSYSTEM", "MINGW64")
+		t.Setenv("BASH_VERSION", "")
+		t.Setenv("SHELL", "/usr/bin/bash")
+		if got := detectWindowsShell(); got != "bash" {
+			t.Fatalf("detectWindowsShell() = %q, want bash", got)
+		}
+	})
+
+	t.Run("parent shell wins", func(t *testing.T) {
+		t.Setenv("MSYSTEM", "")
+		t.Setenv("BASH_VERSION", "")
+		t.Setenv("SHELL", "")
+		t.Setenv("PSModulePath", "set")
+		detectParentShellProcess = func() string { return "cmd" }
+		detectPreferredPowershell = func() string {
+			t.Fatal("preferredPowerShell should not be called")
+			return ""
+		}
+		if got := detectWindowsShell(); got != "cmd" {
+			t.Fatalf("detectWindowsShell() = %q, want cmd", got)
+		}
+	})
+
+	t.Run("preferred powershell fallback", func(t *testing.T) {
+		t.Setenv("MSYSTEM", "")
+		t.Setenv("BASH_VERSION", "")
+		t.Setenv("SHELL", "")
+		t.Setenv("PSModulePath", "set")
+		detectParentShellProcess = func() string { return "" }
+		detectPreferredPowershell = func() string { return "pwsh-custom" }
+		if got := detectWindowsShell(); got != "pwsh-custom" {
+			t.Fatalf("detectWindowsShell() = %q, want pwsh-custom", got)
+		}
+	})
+
+	t.Run("cmd fallback", func(t *testing.T) {
+		t.Setenv("MSYSTEM", "")
+		t.Setenv("BASH_VERSION", "")
+		t.Setenv("SHELL", "")
+		t.Setenv("PSModulePath", "")
+		detectParentShellProcess = func() string { return "" }
+		if got := detectWindowsShell(); got != "cmd" {
+			t.Fatalf("detectWindowsShell() = %q, want cmd", got)
+		}
+	})
+}
+
+func TestDetectShellVersion_ScriptedShells(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("scripted shell test is for unix-like environments")
+	}
+
+	tmpDir := t.TempDir()
+	fishPath := filepath.Join(tmpDir, "fish")
+	pwshPath := filepath.Join(tmpDir, "pwsh")
+	script := "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then\n  echo 'fish 3.7.1'\n  exit 0\nfi\nif [ \"$1\" = \"-Command\" ]; then\n  echo '7.5.0'\n  exit 0\nfi\nexit 1\n"
+	for _, path := range []string{fishPath, pwshPath} {
+		if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+			t.Fatalf("WriteFile(%s): %v", path, err)
+		}
+	}
+
+	if got := detectShellVersion(fishPath); got != "fish 3.7.1" {
+		t.Fatalf("detectShellVersion(fish) = %q", got)
+	}
+	if got := detectShellVersion(pwshPath); got != "7.5.0" {
+		t.Fatalf("detectShellVersion(pwsh) = %q", got)
+	}
+}
+
+func TestNonWindowsNoOpHelpers(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-windows helper test")
+	}
+	if got := parentShellProcess(); got != "" {
+		t.Fatalf("parentShellProcess() = %q, want empty", got)
+	}
+	if got := preferredPowerShell(); got != "powershell" {
+		t.Fatalf("preferredPowerShell() = %q, want powershell", got)
 	}
 }

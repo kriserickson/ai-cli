@@ -11,10 +11,7 @@ import (
 	"github.com/fatih/color"
 
 	"github.com/kriserickson/ai-cli/internal/config"
-	"github.com/kriserickson/ai-cli/internal/executor"
-	"github.com/kriserickson/ai-cli/internal/llm"
-	"github.com/kriserickson/ai-cli/internal/memory"
-	"github.com/kriserickson/ai-cli/internal/shell"
+	"github.com/kriserickson/ai-cli/internal/runner"
 )
 
 type replLineReader interface {
@@ -23,10 +20,8 @@ type replLineReader interface {
 }
 
 var (
-	replConfigDir         = config.Dir
-	replNewReadline       = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
-	replBuildSystemPrompt = llm.BuildSystemPrompt
-	replHandleResponse    = handleResponse
+	replConfigDir   = config.Dir
+	replNewReadline = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
 )
 
 // BuiltinCommands holds handlers for built-in REPL commands so the interactive
@@ -40,9 +35,11 @@ type BuiltinCommands struct {
 	ConfigRun func(args []string) error
 	// MemoryRun handles "memory list", "memory add <keyword> <content...>", "memory remove <keyword>".
 	MemoryRun func(args []string) error
+	// HistoryRun handles "history list", "history show <id>", "history remove <id>", "history clear".
+	HistoryRun func(args []string) error
 }
 
-func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Client, shellInfo shell.Info) error {
+func Run(version string, cmds BuiltinCommands, instructionRunner runner.Interface) error {
 	configDir, err := replConfigDir()
 	if err != nil {
 		return err
@@ -58,8 +55,6 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 	defer rl.Close()
 
 	fmt.Printf("AI CLI %s — interactive mode. Type 'help' for commands or 'exit' to quit.\n", version)
-
-	systemPrompt := replBuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, "")
 
 	for {
 		line, err := rl.Readline()
@@ -115,28 +110,24 @@ func Run(version string, cmds BuiltinCommands, cfg *config.Config, client llm.Cl
 				color.Red("Error: %v", err)
 			}
 
-		default:
-			// Inject matching memories into the prompt
-			prompt := systemPrompt
-			entries, memErr := memory.Load()
-			if memErr == nil {
-				matches := memory.FindMatching(input, entries)
-				if len(matches) > 0 {
-					contexts := make([]llm.MemoryContext, len(matches))
-					for i, m := range matches {
-						contexts[i] = llm.MemoryContext{Keyword: m.Keyword, Content: m.Content}
-					}
-					prompt = llm.AppendMemories(prompt, contexts)
-				}
+		case input == "history" || strings.HasPrefix(input, "history "):
+			parts := strings.Fields(input)
+			if err := cmds.HistoryRun(parts[1:]); err != nil {
+				color.Red("Error: %v", err)
 			}
 
-			// Send to LLM
-			resp, err := client.Chat(prompt, input)
+		case input == "retry" || strings.HasPrefix(input, "retry "):
+			depth, err := runner.ParseRetryDepth(input)
 			if err != nil {
 				color.Red("Error: %v", err)
 				continue
 			}
-			if err := replHandleResponse(resp, cfg, shellInfo); err != nil {
+			if err := instructionRunner.RetryLastFailed(depth); err != nil {
+				color.Red("Error: %v", err)
+			}
+
+		default:
+			if err := instructionRunner.RunInstruction(input); err != nil {
 				color.Red("Error: %v", err)
 			}
 		}
@@ -157,37 +148,10 @@ func printHelp() {
 	fmt.Printf("  %-30s %s\n", "memory list", "List all memories")
 	fmt.Printf("  %-30s %s\n", "memory add <keyword> <content>", "Add a memory")
 	fmt.Printf("  %-30s %s\n", "memory remove <keyword>", "Remove a memory")
+	fmt.Printf("  %-30s %s\n", "history [list|show|remove|clear]", "Inspect saved AI sessions")
+	fmt.Printf("  %-30s %s\n", "retry [depth]", "Retry the last failed AI command with optional history depth")
 	fmt.Printf("  %-30s %s\n", "exit / quit", "Exit interactive mode")
 	fmt.Println()
 	fmt.Println("Any other input is translated into shell commands by the AI.")
 	fmt.Println()
-}
-
-func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info) error {
-	switch resp.Type {
-	case "commands":
-		return executor.Run(resp.Commands, cfg, shellInfo)
-	case "config":
-		return applyConfig(resp, cfg)
-	default:
-		return fmt.Errorf("unknown response type: %s", resp.Type)
-	}
-}
-
-func applyConfig(resp *llm.Response, cfg *config.Config) error {
-	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
-	fmt.Print("Apply? [Y/n] ")
-	var input string
-	_, _ = fmt.Scanln(&input)
-	input = strings.TrimSpace(strings.ToLower(input))
-	if input != "" && input != "y" && input != "yes" {
-		fmt.Println("Skipped.")
-		return nil
-	}
-
-	if err := config.ApplyAction(cfg, resp.Action, resp.Key, resp.Value); err != nil {
-		return err
-	}
-	color.Green("Config updated successfully.")
-	return nil
 }

@@ -55,6 +55,53 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 		default:
 			return fmt.Errorf("unknown safety key: %s", key)
 		}
+	case "set_history":
+		switch key {
+		case "include_llm_output":
+			b, err := ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("history.include_llm_output %w", err)
+			}
+			cfg.History.IncludeLLMOutput = b
+		case "include_debug":
+			b, err := ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("history.include_debug %w", err)
+			}
+			cfg.History.IncludeDebug = b
+		case "ask_on_error":
+			b, err := ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("history.ask_on_error %w", err)
+			}
+			cfg.History.AskOnError = b
+		case "auto_check_on_error":
+			b, err := ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("history.auto_check_on_error %w", err)
+			}
+			cfg.History.AutoCheckOnError = b
+		case "retry_max_attempts":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("history.retry_max_attempts must be a number: %w", err)
+			}
+			if n < 0 {
+				return errors.New("history.retry_max_attempts must be 0 or greater")
+			}
+			cfg.History.RetryMaxAttempts = n
+		case "retry_context_depth":
+			n, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("history.retry_context_depth must be a number: %w", err)
+			}
+			if n <= 0 {
+				return errors.New("history.retry_context_depth must be greater than 0")
+			}
+			cfg.History.RetryContextDepth = n
+		default:
+			return fmt.Errorf("unknown history key: %s", key)
+		}
 	default:
 		return fmt.Errorf("unknown config action: %s", action)
 	}

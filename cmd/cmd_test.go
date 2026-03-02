@@ -2,15 +2,20 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kriserickson/ai-cli/internal/config"
+	"github.com/kriserickson/ai-cli/internal/history"
+	"github.com/kriserickson/ai-cli/internal/llm"
+	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
 // runCmd executes rootCmd with the given args and returns captured stdout.
@@ -28,6 +33,10 @@ func runCmd(t *testing.T, args ...string) (string, error) {
 	rootCmd.SilenceUsage = true
 	rootCmd.TraverseChildren = true
 	debugFlag = ""
+	retryOnErrorFlag = false
+	retryDepthFlag = 0
+	historyVerbose = false
+	historyCount = 10
 	execErr := rootCmd.Execute()
 
 	w.Close()
@@ -45,6 +54,21 @@ func tempHome(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
+}
+
+func seedHistory(t *testing.T, instructions ...string) []history.Session {
+	t.Helper()
+
+	cfg := config.DefaultConfig()
+	sessions := make([]history.Session, 0, len(instructions))
+	for _, instruction := range instructions {
+		session := history.NewSession(instruction, t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
+		if err := history.Save(session); err != nil {
+			t.Fatalf("history.Save(%q): %v", instruction, err)
+		}
+		sessions = append(sessions, *session)
+	}
+	return sessions
 }
 
 // --- maskKey ---
@@ -86,6 +110,12 @@ func TestGetConfigValue(t *testing.T) {
 		{"min_certainty", "80"},
 		{"allowlist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
 		{"debug", "none"},
+		{"history_include_llm_output", "true"},
+		{"history_include_debug", "false"},
+		{"history_ask_on_error", "true"},
+		{"history_auto_check_on_error", "false"},
+		{"history_retry_max_attempts", "1"},
+		{"history_retry_context_depth", "3"},
 	}
 	for _, tt := range tests {
 		got, err := getConfigValue(cfg, tt.key)
@@ -207,6 +237,12 @@ func TestSetConfigValue(t *testing.T) {
 		{"debug", "screen", func(c *config.Config) bool { return c.Debug == "screen" }},
 		{"debug", "file", func(c *config.Config) bool { return c.Debug == "file" }},
 		{"debug", "none", func(c *config.Config) bool { return c.Debug == "none" }},
+		{"history_include_llm_output", "false", func(c *config.Config) bool { return !c.History.IncludeLLMOutput }},
+		{"history_include_debug", "true", func(c *config.Config) bool { return c.History.IncludeDebug }},
+		{"history_ask_on_error", "false", func(c *config.Config) bool { return !c.History.AskOnError }},
+		{"history_auto_check_on_error", "true", func(c *config.Config) bool { return c.History.AutoCheckOnError }},
+		{"history_retry_max_attempts", "2", func(c *config.Config) bool { return c.History.RetryMaxAttempts == 2 }},
+		{"history_retry_context_depth", "5", func(c *config.Config) bool { return c.History.RetryContextDepth == 5 }},
 	}
 	for _, tt := range tests {
 		cfg := config.DefaultConfig()
@@ -231,7 +267,9 @@ func TestSetConfigValue_Validation(t *testing.T) {
 		{"min_certainty", "-1"},     // out of range
 		{"min_certainty", "101"},    // out of range
 		{"always_confirm", "1"},     // invalid bool-like value
-		{"unknown_key", "value"},    // unknown key
+		{"history_retry_max_attempts", "-1"},
+		{"history_retry_context_depth", "0"},
+		{"unknown_key", "value"}, // unknown key
 	}
 	for _, tt := range tests {
 		if err := setConfigValue(config.DefaultConfig(), tt.key, tt.value); err == nil {
@@ -261,7 +299,7 @@ func TestConfigShow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("config show error: %v", err)
 	}
-	for _, want := range []string{"[provider]", "[safety]", "model", "default"} {
+	for _, want := range []string{"[provider]", "[safety]", "[history]", "model", "default"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("config show output missing %q\nfull output:\n%s", want, out)
 		}
@@ -432,7 +470,7 @@ func TestConfigShow_ContainsAllSections(t *testing.T) {
 		t.Fatalf("config show error: %v", err)
 	}
 	// Verify TOML structure
-	for _, want := range []string{"[provider]", "[safety]", "debug"} {
+	for _, want := range []string{"[provider]", "[safety]", "[history]", "debug"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("config show missing %q", want)
 		}
@@ -508,6 +546,258 @@ func TestConfigSet_URLs(t *testing.T) {
 	}
 	if !strings.Contains(out, "https://proxy.example.com/v1") {
 		t.Errorf("llm_url = %q", strings.TrimSpace(out))
+	}
+}
+
+func TestHistoryListAndShow(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Model = "gpt-4o-mini"
+
+	session := history.NewSession("on the remote server my-server download the latest backup", t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
+	session.Status = "completed"
+	session.RecordExchange("initial", 1, "system", session.Instruction, &llm.ChatResult{
+		Response: &llm.Response{
+			Type: "commands",
+			Commands: []llm.Command{
+				{Command: "scp kris@example:backup.sql.gz ."},
+			},
+		},
+	}, nil, cfg.History)
+	session.Executions = []history.CommandAttempt{
+		{
+			Attempt:   1,
+			Index:     0,
+			Command:   "scp kris@137.184.10.103:~/database-backup/latest.sql.gz .",
+			ExitCode:  0,
+			StartedAt: time.Now(),
+		},
+	}
+	session.UpdatedAt = time.Date(2026, 3, 1, 18, 19, 13, 0, time.Local)
+	if err := history.Save(session); err != nil {
+		t.Fatalf("history.Save(session): %v", err)
+	}
+
+	fallback := history.NewSession("second command", t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
+	fallback.RecordExchange("initial", 1, "system", fallback.Instruction, &llm.ChatResult{
+		Response: &llm.Response{
+			Type: "commands",
+			Commands: []llm.Command{
+				{Command: "echo second"},
+			},
+		},
+	}, nil, cfg.History)
+	if err := history.Save(fallback); err != nil {
+		t.Fatalf("history.Save(fallback): %v", err)
+	}
+
+	out, err := runCmd(t, "history", "list")
+	if err != nil {
+		t.Fatalf("history list: %v", err)
+	}
+	for _, want := range []string{
+		"2026-03-01 18:19:13 : completed retries=0 model=gpt-4o-mini",
+		"  prompt: on the remote server my-server download the latest backup",
+		"  command: scp kris@137.184.10.103:~/database-backup/latest.sql.gz .",
+		"  prompt: second command",
+		"  command: echo second",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("history list output missing %q:\n%s", want, out)
+		}
+	}
+
+	out, err = runCmd(t, "history", "show", session.ID)
+	if err != nil {
+		t.Fatalf("history show: %v", err)
+	}
+	if !strings.Contains(out, "Instruction: "+session.Instruction) {
+		t.Fatalf("history show missing instruction:\n%s", out)
+	}
+	if !strings.Contains(out, "ID:") {
+		t.Fatalf("history show missing ID:\n%s", out)
+	}
+}
+
+func TestHistoryListDefaultCountVerboseAndCountFlag(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Model = "gpt-4o-mini"
+
+	for i := range 12 {
+		session := history.NewSession(fmt.Sprintf("prompt %02d", i), t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
+		session.Status = "completed"
+		session.UpdatedAt = time.Date(2026, 3, 2, 10, i, 0, 0, time.Local)
+		session.CreatedAt = session.UpdatedAt
+		session.Exchanges = []history.Exchange{
+			{
+				Attempt:     1,
+				Kind:        "initial",
+				UserMessage: session.Instruction,
+				Response: &llm.Response{
+					Type:        "commands",
+					Explanation: fmt.Sprintf("explanation %02d", i),
+					Commands: []llm.Command{
+						{Command: fmt.Sprintf("echo generated-%02d", i)},
+					},
+				},
+				CreatedAt: session.UpdatedAt,
+			},
+		}
+		session.Executions = []history.CommandAttempt{
+			{
+				Attempt:    1,
+				Index:      0,
+				Command:    fmt.Sprintf("echo executed-%02d", i),
+				Confirmed:  true,
+				ExitCode:   i % 2,
+				Stdout:     fmt.Sprintf("stdout %02d", i),
+				Stderr:     fmt.Sprintf("stderr %02d", i),
+				StartedAt:  session.UpdatedAt,
+				DurationMS: int64(i + 1),
+			},
+		}
+		if err := history.Save(session); err != nil {
+			t.Fatalf("history.Save(%d): %v", i, err)
+		}
+	}
+
+	out, err := runCmd(t, "history")
+	if err != nil {
+		t.Fatalf("history default list: %v", err)
+	}
+	if got := strings.Count(out, "  prompt: "); got != 10 {
+		t.Fatalf("default history count = %d, want 10\n%s", got, out)
+	}
+	if strings.Contains(out, "  prompt: prompt 00") || strings.Contains(out, "  prompt: prompt 01") {
+		t.Fatalf("default history output should omit oldest sessions:\n%s", out)
+	}
+	if !strings.Contains(out, "  prompt: prompt 11") {
+		t.Fatalf("default history output missing newest session:\n%s", out)
+	}
+
+	out, err = runCmd(t, "history", "--count", "3")
+	if err != nil {
+		t.Fatalf("history --count 3: %v", err)
+	}
+	if got := strings.Count(out, "  prompt: "); got != 3 {
+		t.Fatalf("history --count 3 entries = %d, want 3\n%s", got, out)
+	}
+
+	out, err = runCmd(t, "history", "--verbose", "--count", "1")
+	if err != nil {
+		t.Fatalf("history --verbose --count 1: %v", err)
+	}
+	for _, want := range []string{
+		"  id: ",
+		"  provider: ",
+		"  shell: /bin/zsh (zsh)",
+		"  directory: ",
+		"  exchange: attempt=1 kind=initial",
+		"  explanation: explanation 11",
+		"  result: exit=1 skipped=false confirmed=true",
+		"  stdout: stdout 11",
+		"  stderr: stderr 11",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("verbose history output missing %q:\n%s", want, out)
+		}
+	}
+
+	_, err = runCmd(t, "history", "--count", "0")
+	if err == nil {
+		t.Fatal("history --count 0 error = nil, want error")
+	}
+}
+
+func TestHistoryListDoesNotTruncatePromptOrCommand(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Model = "gpt-4o-mini"
+
+	longPrompt := "on the remote server my-server in the ~/database-backup download the latest mysql-backup-yyyy-mm-dd.sql.gz file without shortening any part of this request because the list output should keep the whole prompt"
+	longCommand := "scp kris@137.184.10.103:~/database-backup/$(ssh kris@137.184.10.103 'cd ~/database-backup && ls -t mysql-backup-*.sql.gz | head -n 1') ."
+
+	session := history.NewSession(longPrompt, t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
+	session.Status = "completed"
+	session.Executions = []history.CommandAttempt{{Attempt: 1, Index: 0, Command: longCommand, ExitCode: 0, StartedAt: time.Now()}}
+	if err := history.Save(session); err != nil {
+		t.Fatalf("history.Save(session): %v", err)
+	}
+
+	out, err := runCmd(t, "history", "--count", "1")
+	if err != nil {
+		t.Fatalf("history --count 1: %v", err)
+	}
+	if !strings.Contains(out, "  prompt: "+longPrompt) {
+		t.Fatalf("history prompt was truncated:\n%s", out)
+	}
+	if !strings.Contains(out, "  command: "+longCommand) {
+		t.Fatalf("history command was truncated:\n%s", out)
+	}
+}
+
+func TestHistoryVerboseDoesNotTruncateExplanation(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Model = "gpt-4o-mini"
+
+	explanation := "this explanation should remain completely intact in verbose mode even when it is long enough that the one-line helper would normally shorten it for display in other fields"
+	session := history.NewSession("prompt", t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
+	session.Exchanges = []history.Exchange{
+		{
+			Attempt:     1,
+			Kind:        "retry",
+			UserMessage: "prompt",
+			Response: &llm.Response{
+				Type:        "commands",
+				Explanation: explanation,
+				Commands: []llm.Command{
+					{Command: "echo ok"},
+				},
+			},
+			CreatedAt: time.Now(),
+		},
+	}
+	if err := history.Save(session); err != nil {
+		t.Fatalf("history.Save(session): %v", err)
+	}
+
+	out, err := runCmd(t, "history", "--verbose", "--count", "1")
+	if err != nil {
+		t.Fatalf("history --verbose --count 1: %v", err)
+	}
+	if !strings.Contains(out, "  explanation: "+explanation) {
+		t.Fatalf("verbose explanation was truncated:\n%s", out)
+	}
+}
+
+func TestHistoryRemoveAndClear(t *testing.T) {
+	tempHome(t)
+	sessions := seedHistory(t, "remove me", "keep me")
+
+	if _, err := runCmd(t, "history", "remove", sessions[0].ID); err != nil {
+		t.Fatalf("history remove: %v", err)
+	}
+
+	out, err := runCmd(t, "history", "list")
+	if err != nil {
+		t.Fatalf("history list after remove: %v", err)
+	}
+	if strings.Contains(out, "remove me") {
+		t.Fatalf("history remove did not remove session:\n%s", out)
+	}
+
+	if _, err := runCmd(t, "history", "clear"); err != nil {
+		t.Fatalf("history clear: %v", err)
+	}
+
+	out, err = runCmd(t, "history")
+	if err != nil {
+		t.Fatalf("history default list after clear: %v", err)
+	}
+	if !strings.Contains(out, "No AI history stored.") {
+		t.Fatalf("history clear output unexpected:\n%s", out)
 	}
 }
 

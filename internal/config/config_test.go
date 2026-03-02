@@ -27,6 +27,24 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Debug != "none" {
 		t.Errorf("debug = %q, want %q", cfg.Debug, "none")
 	}
+	if !cfg.History.IncludeLLMOutput {
+		t.Error("history.include_llm_output should default to true")
+	}
+	if cfg.History.IncludeDebug {
+		t.Error("history.include_debug should default to false")
+	}
+	if !cfg.History.AskOnError {
+		t.Error("history.ask_on_error should default to true")
+	}
+	if cfg.History.AutoCheckOnError {
+		t.Error("history.auto_check_on_error should default to false")
+	}
+	if cfg.History.RetryMaxAttempts != 1 {
+		t.Errorf("history.retry_max_attempts = %d, want 1", cfg.History.RetryMaxAttempts)
+	}
+	if cfg.History.RetryContextDepth != 3 {
+		t.Errorf("history.retry_context_depth = %d, want 3", cfg.History.RetryContextDepth)
+	}
 	if len(cfg.Safety.AllowlistPrefixes) == 0 {
 		t.Error("allowlist should not be empty by default")
 	}
@@ -50,6 +68,8 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg.Provider.Model = "gpt-4o"
 	cfg.Safety.MinCertainty = 90
 	cfg.Debug = "file"
+	cfg.History.IncludeDebug = true
+	cfg.History.RetryContextDepth = 5
 
 	if err := Save(cfg); err != nil {
 		t.Fatalf("Save error: %v", err)
@@ -84,6 +104,12 @@ func TestSaveAndLoad(t *testing.T) {
 	}
 	if loaded.Debug != "file" {
 		t.Errorf("loaded debug = %q, want %q", loaded.Debug, "file")
+	}
+	if !loaded.History.IncludeDebug {
+		t.Error("loaded history.include_debug should be true")
+	}
+	if loaded.History.RetryContextDepth != 5 {
+		t.Errorf("loaded history.retry_context_depth = %d, want 5", loaded.History.RetryContextDepth)
 	}
 }
 
