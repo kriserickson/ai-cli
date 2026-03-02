@@ -22,6 +22,7 @@ type Config struct {
 	Provider ProviderConfig `toml:"provider"`
 	Safety   SafetyConfig   `toml:"safety"`
 	Debug    string         `toml:"debug"` // "none", "screen", or "file"
+	Explain  bool           `toml:"-"`     // runtime-only; set from CLI flag, not persisted
 }
 
 type ProviderConfig struct {

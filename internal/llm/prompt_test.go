@@ -28,6 +28,7 @@ func TestBuildSystemPrompt_ContainsJSONInstructions(t *testing.T) {
 		`"type": "commands"`,
 		`"risk"`,
 		`"certainty"`,
+		`"explanation"`,
 		`"type": "config"`,
 		"valid JSON",
 	}

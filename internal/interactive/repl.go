@@ -168,7 +168,7 @@ func printHelp() {
 func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info, explain bool) error {
 	switch resp.Type {
 	case "commands":
-		return executor.Run(resp.Commands, cfg, shellInfo, explain)
+		return executor.Run(resp.Commands, cfg, shellInfo, cfg.Explain)
 	case "config":
 		return applyConfig(resp, cfg)
 	default:
