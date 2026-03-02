@@ -58,18 +58,18 @@ func (r *RunResult) FirstFailure() *CommandResult {
 }
 
 // Run executes a list of commands sequentially, prompting for confirmation as needed.
-func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info) error {
-	result, err := RunWithResults(commands, cfg, shellInfo)
+func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info, explain bool) error {
+	result, err := RunWithResults(commands, cfg, shellInfo, explain)
 	if err != nil {
 		return err
 	}
-	if result.FirstFailure() != nil {
-		return fmt.Errorf("command failed: exit code %d", result.FirstFailure().ExitCode)
+	if failure := result.FirstFailure(); failure != nil {
+		return fmt.Errorf("command failed: exit code %d", failure.ExitCode)
 	}
 	return nil
 }
 
-func RunWithResults(commands []llm.Command, cfg *config.Config, shellInfo shell.Info) (*RunResult, error) {
+func RunWithResults(commands []llm.Command, cfg *config.Config, shellInfo shell.Info, explain bool) (*RunResult, error) {
 	runResult := &RunResult{Commands: make([]CommandResult, 0, len(commands))}
 
 	for i, command := range commands {
@@ -89,6 +89,10 @@ func RunWithResults(commands []llm.Command, cfg *config.Config, shellInfo shell.
 			safeColor.Printf("[safe]")
 		}
 		dimColor.Printf(" %d%% certainty\n", command.Certainty)
+
+		if explain && command.Explanation != "" {
+			dimColor.Fprintf(os.Stdout, "  %s\n", command.Explanation)
+		}
 
 		result := CommandResult{
 			Index:   i,
@@ -148,7 +152,6 @@ func execute(command string, shellInfo shell.Info) executionResult {
 
 	err := cmd.Run()
 	result := executionResult{
-		ExitCode:  0,
 		Stdout:    stdoutCapture.String(),
 		Stderr:    stderrCapture.String(),
 		StartedAt: startedAt,

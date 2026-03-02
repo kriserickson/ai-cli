@@ -210,6 +210,40 @@ func TestApplyAction_SetSafety_MinCertainty(t *testing.T) {
 	}
 }
 
+func TestApplyAction_SetSafety_ToolCalling(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		want    string
+		wantErr bool
+	}{
+		{name: "never", value: ToolCallingNever, want: ToolCallingNever},
+		{name: "always_prompt", value: ToolCallingAlwaysPrompt, want: ToolCallingAlwaysPrompt},
+		{name: "dangerous_prompt", value: ToolCallingDangerousPrompt, want: ToolCallingDangerousPrompt},
+		{name: "always_allow", value: ToolCallingAlwaysAllow, want: ToolCallingAlwaysAllow},
+		{name: "invalid", value: "sometimes", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := applyTestCfg(t)
+			err := ApplyAction(cfg, "set_safety", "tool_calling", tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if cfg.Safety.ToolCalling != tt.want {
+				t.Errorf("ToolCalling = %q, want %q", cfg.Safety.ToolCalling, tt.want)
+			}
+		})
+	}
+}
+
 func TestApplyAction_SetSafety_UnknownKey(t *testing.T) {
 	cfg := applyTestCfg(t)
 	err := ApplyAction(cfg, "set_safety", "nonexistent", "value")

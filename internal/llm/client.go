@@ -18,6 +18,7 @@ import (
 
 type Client interface {
 	Chat(systemPrompt, userMessage string) (*Response, error)
+	ChatMessages(messages []Message) (*Response, error)
 	ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error)
 }
 
@@ -37,7 +38,7 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot open log file %s: %w", logPath, err)
 		}
-		return f, func() { f.Close() }, nil
+		return f, func() { _ = f.Close() }, nil
 	default:
 		return nil, func() {}, nil
 	}
@@ -97,13 +98,25 @@ func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error)
 	return result.Response, nil
 }
 
+func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
+	result, err := c.chatWithMessages(messages)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
 func (c *openAIClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
+	return c.chatWithMessages([]Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userMessage},
+	})
+}
+
+func (c *openAIClient) chatWithMessages(messages []Message) (*ChatResult, error) {
 	req := ChatRequest{
-		Model: c.model,
-		Messages: []Message{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userMessage},
-		},
+		Model:    c.model,
+		Messages: messages,
 	}
 
 	body, err := json.Marshal(req)
@@ -124,7 +137,7 @@ func (c *openAIClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatRes
 		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s/chat/completions\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
 	}
 
-	httpReq, err := http.NewRequestWithContext(context.Background(), "POST", c.baseURL+"/chat/completions", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -169,6 +182,7 @@ func (c *openAIClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatRes
 
 	content := chatResp.Choices[0].Message.Content
 	trace.RawContent = content
+
 	parsed, err := parseResponse(content)
 	if err != nil {
 		return &ChatResult{Trace: trace}, err
@@ -207,11 +221,43 @@ func (c *ollamaClient) Chat(systemPrompt, userMessage string) (*Response, error)
 	return result.Response, nil
 }
 
+func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
+	result, err := c.chatWithMessages(messages)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
 func (c *ollamaClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
+	return c.chatWithMessages([]Message{
+		{Role: "system", Content: systemPrompt},
+		{Role: "user", Content: userMessage},
+	})
+}
+
+func (c *ollamaClient) chatWithMessages(messages []Message) (*ChatResult, error) {
+	var system, prompt string
+	for _, m := range messages {
+		switch m.Role {
+		case "system":
+			if system == "" {
+				system = m.Content
+			} else {
+				system += "\n" + m.Content
+			}
+		default:
+			if prompt != "" {
+				prompt += "\n"
+			}
+			prompt += m.Content
+		}
+	}
+
 	req := ollamaRequest{
 		Model:  c.model,
-		Prompt: userMessage,
-		System: systemPrompt,
+		Prompt: prompt,
+		System: system,
 		Stream: false,
 	}
 
@@ -233,7 +279,7 @@ func (c *ollamaClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatRes
 		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
 	}
 
-	httpReq, err := http.NewRequestWithContext(context.Background(), "POST", c.baseURL, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.baseURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -275,6 +321,7 @@ func (c *ollamaClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatRes
 	}
 
 	trace.RawContent = ollamaResp.Response
+
 	parsed, err := parseResponse(ollamaResp.Response)
 	if err != nil {
 		return &ChatResult{Trace: trace}, err
@@ -285,14 +332,12 @@ func (c *ollamaClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatRes
 func parseResponse(content string) (*Response, error) {
 	content = strings.TrimSpace(content)
 
-	// Strip markdown code fences if present
+	// Strip markdown code fences if present.
 	if strings.HasPrefix(content, "```") {
 		lines := strings.Split(content, "\n")
-		// Remove first line (```json or ```)
 		if len(lines) > 2 {
 			lines = lines[1:]
 		}
-		// Remove last line (```)
 		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
 			lines = lines[:len(lines)-1]
 		}

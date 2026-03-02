@@ -71,7 +71,6 @@ func Run(version string, cmds BuiltinCommands, instructionRunner runner.Interfac
 			continue
 		}
 
-		// Built-in commands — handle without hitting the LLM
 		switch {
 		case input == "exit" || input == "quit":
 			fmt.Println("Bye!")

@@ -15,6 +15,7 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/memory"
 	"github.com/kriserickson/ai-cli/internal/shell"
+	"github.com/kriserickson/ai-cli/internal/tools"
 )
 
 var runnerStdinIsTTY = stdinIsTTY
@@ -28,20 +29,33 @@ type Runner struct {
 	cfg        *config.Config
 	client     llm.Client
 	shellInfo  shell.Info
+	explain    bool
 	lastFailed *history.Session
 }
 
-func New(cfg *config.Config, client llm.Client, shellInfo shell.Info) *Runner {
-	return &Runner{
+type Option func(*Runner)
+
+func WithExplain(explain bool) Option {
+	return func(r *Runner) {
+		r.explain = explain
+	}
+}
+
+func New(cfg *config.Config, client llm.Client, shellInfo shell.Info, opts ...Option) *Runner {
+	r := &Runner{
 		cfg:       cfg,
 		client:    client,
 		shellInfo: shellInfo,
 	}
+	for _, opt := range opts {
+		opt(r)
+	}
+	return r
 }
 
 func (r *Runner) RunInstruction(instruction string) error {
 	cwd, _ := os.Getwd()
-	systemPrompt := llm.BuildSystemPrompt(r.shellInfo.OS, r.shellInfo.Shell, r.shellInfo.Version, cwd)
+	systemPrompt := llm.BuildSystemPrompt(r.shellInfo.OS, r.shellInfo.Shell, r.shellInfo.Version, cwd, r.explain, r.toolsEnabled())
 	systemPrompt = r.appendMemories(systemPrompt, instruction)
 
 	session := history.NewSession(instruction, cwd, r.cfg, r.shellInfo)
@@ -57,7 +71,7 @@ func (r *Runner) RetryLastFailed(depth int) error {
 	}
 
 	cwd := r.lastFailed.WorkingDirectory
-	systemPrompt := llm.BuildSystemPrompt(r.shellInfo.OS, r.shellInfo.Shell, r.shellInfo.Version, cwd)
+	systemPrompt := llm.BuildSystemPrompt(r.shellInfo.OS, r.shellInfo.Shell, r.shellInfo.Version, cwd, r.explain, r.toolsEnabled())
 	return r.retrySession(r.lastFailed, systemPrompt, depth, false)
 }
 
@@ -79,7 +93,19 @@ func ParseRetryDepth(input string) (int, error) {
 func (r *Runner) runSession(session *history.Session, systemPrompt, userMessage, kind string, autoRetry bool, depth int) error {
 	attempt := session.RetryCount + 1
 
-	chatResult, err := r.client.ChatWithTrace(systemPrompt, userMessage)
+	var (
+		chatResult *llm.ChatResult
+		err        error
+	)
+	if r.toolsEnabled() {
+		var resp *llm.Response
+		resp, err = tools.RunWithTools(r.client, systemPrompt, userMessage, r.cfg, r.shellInfo, 3)
+		if resp != nil {
+			chatResult = &llm.ChatResult{Response: resp}
+		}
+	} else {
+		chatResult, err = r.client.ChatWithTrace(systemPrompt, userMessage)
+	}
 	session.RecordExchange(kind, attempt, systemPrompt, userMessage, chatResult, err, r.cfg.History)
 	r.saveSession(session)
 	if err != nil {
@@ -96,7 +122,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt, userMessage,
 
 	switch resp.Type {
 	case "commands":
-		runResult, runErr := executor.RunWithResults(resp.Commands, r.cfg, r.shellInfo)
+		runResult, runErr := executor.RunWithResults(resp.Commands, r.cfg, r.shellInfo, r.explain)
 		if runResult != nil {
 			session.RecordExecutions(attempt, runResult.Commands)
 		}
@@ -197,6 +223,10 @@ func (r *Runner) appendMemories(systemPrompt, instruction string) string {
 
 func (r *Runner) saveSession(session *history.Session) {
 	_ = history.Save(session)
+}
+
+func (r *Runner) toolsEnabled() bool {
+	return r.cfg.Safety.ToolCalling != config.ToolCallingNever
 }
 
 func applyConfig(resp *llm.Response, cfg *config.Config) error {

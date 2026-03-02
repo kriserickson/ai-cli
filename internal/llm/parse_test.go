@@ -112,3 +112,25 @@ func TestParseResponse_EmptyString(t *testing.T) {
 		t.Error("expected error for empty string, got nil")
 	}
 }
+
+func TestParseResponse_WithExplanation(t *testing.T) {
+	input := `{"type":"commands","commands":[{"command":"ls -la","description":"list files","risk":"safe","certainty":95,"explanation":"Lists all files including hidden ones in long format. -l enables long listing, -a includes dotfiles."}]}`
+	resp, err := parseResponse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Commands[0].Explanation != "Lists all files including hidden ones in long format. -l enables long listing, -a includes dotfiles." {
+		t.Errorf("explanation = %q, want detailed explanation", resp.Commands[0].Explanation)
+	}
+}
+
+func TestParseResponse_WithoutExplanation(t *testing.T) {
+	input := `{"type":"commands","commands":[{"command":"ls","description":"list files","risk":"safe","certainty":99}]}`
+	resp, err := parseResponse(input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if resp.Commands[0].Explanation != "" {
+		t.Errorf("explanation = %q, want empty string", resp.Commands[0].Explanation)
+	}
+}

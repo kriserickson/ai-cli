@@ -33,7 +33,9 @@ Rules for commands:
 - For multi-step tasks, return multiple commands in order. Use shell constructs like $(...) or pipes to chain when possible
 - Generate commands appropriate for the detected OS and shell
 - Never generate commands that could cause irreversible damage without clear user intent
+{{EXPLAIN_INSTRUCTION}}
 {{PLATFORM_HINTS}}
+{{TOOL_INSTRUCTIONS}}
 For requests to change AI CLI configuration (model, provider, API key, safety settings), respond with:
 {
   "type": "config",
@@ -91,8 +93,53 @@ Platform-specific rules (Windows):
     VERSION=$(curl -s https://api.github.com/repos/kriserickson/ai-cli/releases/latest | grep '"tag_name"' | cut -d'"' -f4) && curl -LO "https://github.com/kriserickson/ai-cli/releases/download/${VERSION}/ai-${VERSION}-windows-amd64.zip" && unzip -o "ai-${VERSION}-windows-amd64.zip" -d ai-update && mv ai-update/ai.exe "$(which ai)" && rm -rf "ai-${VERSION}-windows-amd64.zip" ai-update
 `
 
-func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string) string {
+const toolInstructions = `You have access to read-only tools to gather information before generating commands.
+To use a tool, respond with:
+{
+  "type": "tool_request",
+  "tool": "tool_name",
+  "args": {"arg_name": "value"}
+}
+
+Available tools:
+- list_directory: List files in a directory. Args: path (default ".")
+- read_file: Read file contents (max 10KB, safety-checked). Args: path
+- command_help: Get help/man page for a command. Args: command
+- list_memories: List stored AI CLI memories. No args.
+- list_processes: List running processes. No args.
+- system_resources: Show top processes by CPU/memory. No args.
+- network_connections: Show active network connections. No args.
+- ping: Check host connectivity (3 packets). Args: host
+- check_command: Check if a command is installed. Args: command
+- disk_usage: Show disk space usage. No args.
+- environment: Show environment variables (sensitive values masked). No args.
+
+Rules for tools:
+- Use tools ONLY when you need information to generate better commands
+- Maximum 3 tool calls per request
+- After gathering information, respond with a "commands" or "config" response as usual
+`
+
+const explainInstruction = `
+- Include an "explanation" field in each command object with a detailed explanation of how the command works, including what each flag and argument does.
+  Example explanations:
+  - For "find . -name '*.log' -mtime +7 -delete": "Searches the current directory recursively for files matching *.log that were last modified more than 7 days ago, then deletes them. -name filters by filename pattern, -mtime +7 means modified more than 7 days ago, -delete removes each match."
+  - For "tar -czf backup.tar.gz src/": "Creates a gzip-compressed tar archive named backup.tar.gz containing the src/ directory. -c creates a new archive, -z compresses with gzip, -f specifies the output filename."
+  - For "grep -rn 'TODO' --include='*.go' .": "Recursively searches all .go files in the current directory for lines containing 'TODO'. -r enables recursive search, -n shows line numbers, --include restricts to files matching the pattern."
+`
+
+func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string, explain, toolsEnabled bool) string {
 	platformHints := buildPlatformHints(osInfo)
+
+	var explainText string
+	if explain {
+		explainText = explainInstruction
+	}
+
+	var toolText string
+	if toolsEnabled {
+		toolText = toolInstructions
+	}
 
 	r := strings.NewReplacer(
 		"{{OS}}", osInfo,
@@ -100,6 +147,8 @@ func BuildSystemPrompt(osInfo, shell, shellVersion, cwd string) string {
 		"{{SHELL_VERSION}}", shellVersion,
 		"{{CWD}}", cwd,
 		"{{PLATFORM_HINTS}}", platformHints,
+		"{{EXPLAIN_INSTRUCTION}}", explainText,
+		"{{TOOL_INSTRUCTIONS}}", toolText,
 	)
 
 	return r.Replace(promptTemplate)

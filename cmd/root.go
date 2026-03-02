@@ -25,6 +25,7 @@ var (
 	debugFlag        string
 	retryOnErrorFlag bool
 	retryDepthFlag   int
+	explainFlag      bool
 )
 
 // interactiveRun is the entry point for interactive mode, stubbable for testing.
@@ -47,6 +48,7 @@ func init() {
 	rootCmd.Flags().IntVar(&retryDepthFlag, "retry-depth", 0, "Override how many recent command results are included in AI retry context")
 	// When --debug is given without a value, default to config.DebugScreen
 	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
+	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Show detailed explanation of each command")
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -93,7 +95,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		instructionRunner := runner.New(cfg, client, shellInfo)
+		instructionRunner := runner.New(cfg, client, shellInfo, runner.WithExplain(explainFlag))
 		cmds := interactive.BuiltinCommands{
 			Status: func() error {
 				return runStatus(nil, nil)
@@ -216,7 +218,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	return runner.New(cfg, client, shellInfo).RunInstruction(instruction)
+	return runner.New(cfg, client, shellInfo, runner.WithExplain(explainFlag)).RunInstruction(instruction)
 }
 
 func handleConfig(resp *llm.Response, cfg *config.Config) error {

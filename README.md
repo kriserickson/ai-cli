@@ -196,6 +196,7 @@ To customize allowlist prefixes, edit `~/.ai-cli/config.toml`:
 ```toml
 [safety]
 always_confirm = false
+tool_calling = "never"
 min_certainty = 80
 allowlist_prefixes = ["git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"]
 ```
@@ -205,6 +206,33 @@ After editing, run:
 ```sh
 ai status
 ```
+
+## Tool Calling
+
+AI CLI can optionally let the model use built-in read-only tools before it generates shell commands. This is controlled by `safety.tool_calling`.
+
+| Mode | Description |
+|------|-------------|
+| `never` | Tools are fully disabled. No tool instructions are added to the prompt and no tool loop runs. Default. |
+| `always_prompt` | Prompt before every tool call. |
+| `dangerous_prompt` | Auto-approve safe tool calls, but prompt when a tool triggers a safety rule. |
+| `always_allow` | Execute all tool calls without prompting. |
+
+Set it with:
+
+```sh
+ai config set tool_calling never
+ai config set tool_calling always_prompt
+ai config set tool_calling dangerous_prompt
+ai config set tool_calling always_allow
+```
+
+Notes:
+
+- `tool_calling` only controls AI tool usage
+- generated shell commands still follow `always_confirm`, `min_certainty`, risk classification, and the allowlist
+- `dangerous_prompt` only prompts when a tool call hits a safety rule, such as trying to read a restricted path
+- `never` makes AI CLI skip the tool loop entirely and respond directly
 
 ## Memories
 
@@ -349,6 +377,7 @@ Available `ai config get/set` keys:
 | `llm_key` | API key for the current provider | (empty) |
 | `llm_url` | Base URL for the current provider | (provider default) |
 | `always_confirm` | Always prompt before execution (`true`/`false`) | `false` |
+| `tool_calling` | Tool usage mode (`never`, `always_prompt`, `dangerous_prompt`, `always_allow`) | `never` |
 | `min_certainty` | Auto-execute threshold (0-100) | `80` |
 | `debug` | Debug mode (`none`, `screen`, `file`) | `none` |
 | `history_include_llm_output` | Store structured LLM responses in history (`true`/`false`) | `true` |

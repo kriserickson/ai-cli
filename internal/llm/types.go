@@ -35,6 +35,9 @@ type Response struct {
 	Action string `json:"action,omitempty"`
 	Key    string `json:"key,omitempty"`
 	Value  string `json:"value,omitempty"`
+	// Tool request fields (type == "tool_request")
+	Tool     string            `json:"tool,omitempty"`
+	ToolArgs map[string]string `json:"args,omitempty"`
 }
 
 type Command struct {
@@ -42,6 +45,7 @@ type Command struct {
 	Description string `json:"description"`
 	Risk        string `json:"risk"`
 	Certainty   int    `json:"certainty"`
+	Explanation string `json:"explanation,omitempty"`
 }
 
 type ChatTrace struct {

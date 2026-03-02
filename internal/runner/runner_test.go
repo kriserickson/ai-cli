@@ -30,6 +30,27 @@ func (c *scriptedClient) Chat(systemPrompt, userMessage string) (*llm.Response, 
 	return result.Response, nil
 }
 
+func (c *scriptedClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
+	var systemPrompt, userMessage string
+	for _, message := range messages {
+		switch message.Role {
+		case "system":
+			if systemPrompt == "" {
+				systemPrompt = message.Content
+			} else {
+				systemPrompt += "\n" + message.Content
+			}
+		default:
+			if userMessage == "" {
+				userMessage = message.Content
+			} else {
+				userMessage += "\n" + message.Content
+			}
+		}
+	}
+	return c.Chat(systemPrompt, userMessage)
+}
+
 func (c *scriptedClient) ChatWithTrace(_, userMessage string) (*llm.ChatResult, error) {
 	c.messages = append(c.messages, userMessage)
 	idx := len(c.messages) - 1
