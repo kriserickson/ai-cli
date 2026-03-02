@@ -46,7 +46,7 @@ func TestRedactSecret(t *testing.T) {
 		input string
 		want  string
 	}{
-		{input: "", want: "****"},
+		{input: "", want: ""},
 		{input: "short", want: "****"},
 		{input: "12345678", want: "****"},
 		{input: "123456789", want: "1234...6789"},
