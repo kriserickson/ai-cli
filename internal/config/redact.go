@@ -1,7 +1,11 @@
 package config
 
 // RedactSecret masks a secret for display purposes.
+// Returns an empty string if the input is empty, preserving the unset state.
 func RedactSecret(secret string) string {
+	if secret == "" {
+		return ""
+	}
 	if len(secret) <= 8 {
 		return "****"
 	}

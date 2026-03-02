@@ -54,7 +54,7 @@ func TestMaskKey(t *testing.T) {
 		input string
 		want  string
 	}{
-		{"", "****"},
+		{"", ""},
 		{"short", "****"},
 		{"12345678", "****"},         // exactly 8 chars: still masked
 		{"123456789", "1234...6789"}, // 9 chars: shows prefix + suffix
