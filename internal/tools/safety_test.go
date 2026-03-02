@@ -9,7 +9,7 @@ import (
 )
 
 func TestValidatePath_Valid(t *testing.T) {
-	cwd, _ := filepath.Abs("project")
+	var cwd string
 	if runtime.GOOS == "windows" {
 		cwd = "C:\\home\\user\\project"
 	} else {
@@ -38,7 +38,7 @@ func TestValidatePath_Valid(t *testing.T) {
 }
 
 func TestValidatePath_OutsideCWD(t *testing.T) {
-	cwd, _ := filepath.Abs("project")
+	var cwd string
 	if runtime.GOOS == "windows" {
 		cwd = "C:\\home\\user\\project"
 	} else {
