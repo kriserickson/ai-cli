@@ -3,7 +3,6 @@ package tools
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -39,28 +38,23 @@ func TestValidatePath_OutsideCWD(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	paths := []string{
-		"../other",
-		filepath.FromSlash("/etc/passwd"),
-		"../../..",
-	}
 
-	paths := []struct {
+	tests := []struct {
 		path string
 		err  string
 	}{
 		{"../other", "outside"},
-		{"/etc/passwd", ""}, // On Windows this might be blocked or outside
+		{"/etc/passwd", "outside"}, // On Windows this might be blocked or outside
 		{"../../..", "outside"},
 	}
-	for _, tt := range paths {
+	for _, tt := range tests {
 		_, err := ValidatePath(tt.path, cwd)
 		if err == nil {
 			t.Errorf("ValidatePath(%q, %q) should have failed", tt.path, cwd)
 			continue
 		}
 		if err != nil && !strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "blocked") {
-			t.Errorf("ValidatePath(%q) error = %q, want 'outside' or 'blocked'", path, err.Error())
+			t.Errorf("ValidatePath(%q) error = %q, want 'outside' or 'blocked'", tt.path, err.Error())
 		}
 	}
 }
