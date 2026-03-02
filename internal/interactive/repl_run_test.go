@@ -17,11 +17,22 @@ import (
 )
 
 type fakeClient struct {
-	chat func(systemPrompt, userMessage string) (*llm.Response, error)
+	chat         func(systemPrompt, userMessage string) (*llm.Response, error)
+	chatMessages func(messages []llm.Message) (*llm.Response, error)
 }
 
 func (f fakeClient) Chat(systemPrompt, userMessage string) (*llm.Response, error) {
+	if f.chat == nil {
+		return nil, errors.New("fakeClient.Chat not implemented")
+	}
 	return f.chat(systemPrompt, userMessage)
+}
+
+func (f fakeClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
+	if f.chatMessages == nil {
+		return nil, errors.New("fakeClient.ChatMessages not implemented")
+	}
+	return f.chatMessages(messages)
 }
 
 type fakeReadlineStep struct {
@@ -198,7 +209,7 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
 
 	var promptArgs []string
-	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, explain bool) string {
+	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, _, _ bool) string {
 		promptArgs = []string{osName, shellName, shellVersion, cwd}
 		return "system-prompt"
 	}
@@ -291,7 +302,7 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 		},
 	}
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
-	replBuildSystemPrompt = func(_, _, _, _ string, _ bool) string { return "sys" }
+	replBuildSystemPrompt = func(_, _, _, _ string, _ bool, _ bool) string { return "sys" }
 
 	handleCalls := 0
 	replHandleResponse = func(_ *llm.Response, _ *config.Config, _ shell.Info, _ bool) error {

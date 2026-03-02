@@ -34,6 +34,9 @@ type Response struct {
 	Action string `json:"action,omitempty"`
 	Key    string `json:"key,omitempty"`
 	Value  string `json:"value,omitempty"`
+	// Tool request fields (type == "tool_request")
+	Tool     string            `json:"tool,omitempty"`
+	ToolArgs map[string]string `json:"args,omitempty"`
 }
 
 type Command struct {

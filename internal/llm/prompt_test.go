@@ -6,7 +6,7 @@ import (
 )
 
 func TestBuildSystemPrompt_ContainsEnvironment(t *testing.T) {
-	prompt := BuildSystemPrompt("darwin/arm64", "/bin/zsh", "zsh 5.9", "/home/user", false)
+	prompt := BuildSystemPrompt("darwin/arm64", "/bin/zsh", "zsh 5.9", "/home/user", false, false)
 
 	checks := []string{
 		"darwin/arm64",
@@ -22,13 +22,12 @@ func TestBuildSystemPrompt_ContainsEnvironment(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_ContainsJSONInstructions(t *testing.T) {
-	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/tmp", false)
+	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/tmp", false, false)
 
 	checks := []string{
 		`"type": "commands"`,
 		`"risk"`,
 		`"certainty"`,
-		`"explanation"`,
 		`"type": "config"`,
 		"valid JSON",
 	}
@@ -40,7 +39,7 @@ func TestBuildSystemPrompt_ContainsJSONInstructions(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_DarwinPlatformHints(t *testing.T) {
-	prompt := BuildSystemPrompt("darwin/arm64", "/bin/zsh", "zsh 5.9", "/Users/test", false)
+	prompt := BuildSystemPrompt("darwin/arm64", "/bin/zsh", "zsh 5.9", "/Users/test", false, false)
 
 	mustContain := []string{
 		"BSD userland",
@@ -69,7 +68,7 @@ func TestBuildSystemPrompt_DarwinPlatformHints(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_LinuxPlatformHints(t *testing.T) {
-	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/home/test", false)
+	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/home/test", false, false)
 
 	mustContain := []string{
 		"uses GNU coreutils",
@@ -96,7 +95,7 @@ func TestBuildSystemPrompt_LinuxPlatformHints(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_WindowsPlatformHints(t *testing.T) {
-	prompt := BuildSystemPrompt("windows/amd64", "powershell", "5.1", "C:\\Users\\test", false)
+	prompt := BuildSystemPrompt("windows/amd64", "powershell", "5.1", "C:\\Users\\test", false, false)
 
 	mustContain := []string{
 		"PowerShell cmdlets",
@@ -168,7 +167,7 @@ func TestAppendMemories_MultipleMemories(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_UnknownOSNoPlatformHints(t *testing.T) {
-	prompt := BuildSystemPrompt("freebsd/amd64", "/bin/sh", "sh 1.0", "/home/test", false)
+	prompt := BuildSystemPrompt("freebsd/amd64", "/bin/sh", "sh 1.0", "/home/test", false, false)
 
 	platformSections := []string{
 		"BSD userland",
@@ -191,7 +190,7 @@ func TestBuildSystemPrompt_UnknownOSNoPlatformHints(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_ExplainTrue(t *testing.T) {
-	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/tmp", true)
+	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/tmp", true, false)
 
 	mustContain := []string{
 		"explanation",
@@ -208,7 +207,7 @@ func TestBuildSystemPrompt_ExplainTrue(t *testing.T) {
 }
 
 func TestBuildSystemPrompt_ExplainFalse(t *testing.T) {
-	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/tmp", false)
+	prompt := BuildSystemPrompt("linux/amd64", "/bin/bash", "5.1", "/tmp", false, false)
 
 	if strings.Contains(prompt, "detailed explanation") {
 		t.Error("explain=false prompt should not contain explanation instructions")

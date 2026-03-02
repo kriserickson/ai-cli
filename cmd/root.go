@@ -180,7 +180,9 @@ func runRoot(_ *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get working directory: %w", err)
 	}
-	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd, explainFlag)
+
+	toolsEnabled := cfg.Safety.ToolCalling != config.ToolCallingNever
+	systemPrompt := llm.BuildSystemPrompt(shellInfo.OS, shellInfo.Shell, shellInfo.Version, cwd, explainFlag, toolsEnabled)
 
 	// Inject matching memories into the system prompt
 	entries, err := memory.Load()

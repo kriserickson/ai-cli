@@ -38,6 +38,35 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestValidToolCallingMode(t *testing.T) {
+	validModes := []string{
+		ToolCallingNever,
+		ToolCallingAlwaysPrompt,
+		ToolCallingDangerousPrompt,
+		ToolCallingAlwaysAllow,
+	}
+
+	for _, mode := range validModes {
+		if !ValidToolCallingMode(mode) {
+			t.Errorf("ValidToolCallingMode(%q) = false, want true", mode)
+		}
+	}
+
+	invalidModes := []string{
+		"",
+		"always",
+		"dangerous",
+		"prompt",
+		"ALLOW",
+	}
+
+	for _, mode := range invalidModes {
+		if ValidToolCallingMode(mode) {
+			t.Errorf("ValidToolCallingMode(%q) = true, want false", mode)
+		}
+	}
+}
+
 func TestSaveAndLoad(t *testing.T) {
 	// Use a temp dir to avoid touching the real config.
 	// Set both HOME (Unix) and USERPROFILE (Windows) since os.UserHomeDir()
