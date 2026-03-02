@@ -273,6 +273,7 @@ func TestExecListMemories_WithEntries(t *testing.T) {
 func TestExecListMemories_ParseError(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	memDir := filepath.Join(home, ".ai-cli")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {
@@ -448,6 +449,7 @@ func TestExecute_CommandHelp(t *testing.T) {
 func TestExecute_ListMemories_WithConfigHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	memDir := filepath.Join(home, ".ai-cli")
 	if err := os.MkdirAll(memDir, 0o755); err != nil {

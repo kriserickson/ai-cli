@@ -232,6 +232,9 @@ func TestDetectShellVersion_Branches(t *testing.T) {
 }
 
 func TestParentShellProcess_NonWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping non-Windows test on Windows")
+	}
 	// On non-Windows, parentShellProcess is a no-op stub that returns "".
 	got := parentShellProcess()
 	if got != "" {
@@ -240,6 +243,9 @@ func TestParentShellProcess_NonWindows(t *testing.T) {
 }
 
 func TestPreferredPowerShell_NonWindows(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping non-Windows test on Windows")
+	}
 	// On non-Windows, preferredPowerShell returns "powershell".
 	got := preferredPowerShell()
 	if got != "powershell" {
