@@ -207,8 +207,8 @@ func TestValidatePath_SymlinkOutsideCWD(t *testing.T) {
 	if err == nil {
 		t.Error("ValidatePath should have rejected symlink pointing outside cwd")
 	}
-	if err != nil && !strings.Contains(err.Error(), "outside") {
-		t.Errorf("expected 'outside' in error, got: %v", err)
+	if err != nil && !strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "resolves outside") {
+		t.Errorf("expected 'outside' or 'resolves outside' in error, got: %v", err)
 	}
 }
 

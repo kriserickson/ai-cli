@@ -95,7 +95,7 @@ tasks:
       PATH: '{{.GOPATH}}/bin:{{.PATH}}'
     cmds:
       - task: install:lint
-      - golangci-lint run
+      - golangci-lint run ./...
 
   lint:fix:
     desc: Run golangci-lint and fix issues
@@ -103,7 +103,7 @@ tasks:
       PATH: '{{.GOPATH}}/bin:{{.PATH}}'
     cmds:
       - task: install:lint
-      - golangci-lint run --fix
+      - golangci-lint run ./... --fix
 
   install:lint:
     desc: Install golangci-lint if missing

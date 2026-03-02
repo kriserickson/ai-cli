@@ -166,7 +166,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 				return nil
 			},
 		}
-		return interactiveRun(Version, cmds, cfg, client, shellInfo)
+		return interactiveRun(Version, cmds, cfg, client, shellInfo, explainFlag)
 	}
 
 	// Single-shot mode

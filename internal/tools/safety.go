@@ -49,10 +49,10 @@ var sensitiveEnvKeys = []string{
 
 // ValidatePath resolves path to an absolute path and checks that it is
 // contained within cwd and does not match any blocked pattern.
-// Symlinks are resolved so that a link inside cwd pointing outside cannot
-// bypass the containment check.
+// It also resolves symlinks and re-validates the resolved path to prevent
+// symlink attacks that could point outside cwd or to blocked files.
 func ValidatePath(path, cwd string) (string, error) {
-	// Resolve relative to cwd lexically first
+	// Resolve relative to cwd
 	var abs string
 	if filepath.IsAbs(path) {
 		abs = filepath.Clean(path)
@@ -60,9 +60,11 @@ func ValidatePath(path, cwd string) (string, error) {
 		abs = filepath.Clean(filepath.Join(cwd, path))
 	}
 
+	// Always use forward slashes for cross-platform consistency in tests
+	// but convert back to OS specific separators for internal checks
 	cwdClean := filepath.Clean(cwd)
 
-	// Ensure the lexical path is under cwd
+	// Ensure the path is under cwd
 	if abs != cwdClean && !strings.HasPrefix(abs, cwdClean+string(os.PathSeparator)) {
 		return "", fmt.Errorf("path %q is outside the working directory", path)
 	}

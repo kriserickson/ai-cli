@@ -79,7 +79,7 @@ func parentShellProcess() string {
 // preferredPowerShell returns the path to the best available PowerShell binary.
 // It prefers PowerShell 7+ (pwsh) over the legacy Windows PowerShell 5 (powershell).
 func preferredPowerShell() string {
-	if path, err := windowsLookPath("pwsh"); err == nil {
+	if path, err := windowsLookPath(shellPwsh); err == nil {
 		return path
 	}
 	for _, candidate := range []string{
@@ -90,12 +90,12 @@ func preferredPowerShell() string {
 			return candidate
 		}
 	}
-	return "powershell"
+	return shellPowershell
 }
 
 // pwshExePath returns the full path to pwsh.exe, falling back to "pwsh".
 func pwshExePath() string {
-	if path, err := windowsLookPath("pwsh"); err == nil {
+	if path, err := windowsLookPath(shellPwsh); err == nil {
 		return path
 	}
 	for _, candidate := range []string{
@@ -106,5 +106,5 @@ func pwshExePath() string {
 			return candidate
 		}
 	}
-	return "pwsh"
+	return shellPwsh
 }

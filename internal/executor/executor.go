@@ -44,7 +44,7 @@ func Run(commands []llm.Command, cfg *config.Config, shellInfo shell.Info, expla
 		dimColor.Printf(" %d%% certainty\n", cmd.Certainty)
 
 		if explain && cmd.Explanation != "" {
-			dimColor.Printf("  💡 %s\n", cmd.Explanation)
+			dimColor.Fprintf(os.Stdout, "  💡 %s\n", cmd.Explanation)
 		}
 
 		if ShouldConfirm(cmd, cfg) {

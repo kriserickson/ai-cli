@@ -101,7 +101,7 @@ func TestRunRoot_InteractiveMode_ConfigRunShow(t *testing.T) {
 	t.Cleanup(func() { interactiveRun = origRun })
 
 	var capturedCmds interactive.BuiltinCommands
-	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		capturedCmds = cmds
 		return nil
 	}
@@ -160,7 +160,7 @@ func TestRunRoot_InteractiveMode_MemoryRun(t *testing.T) {
 	t.Cleanup(func() { interactiveRun = origRun })
 
 	var capturedCmds interactive.BuiltinCommands
-	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		capturedCmds = cmds
 		return nil
 	}
@@ -219,7 +219,7 @@ func TestRunRoot_InteractiveMode_StatusDoctorSetModel(t *testing.T) {
 	t.Cleanup(func() { interactiveRun = origRun })
 
 	var capturedCmds interactive.BuiltinCommands
-	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, cmds interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		capturedCmds = cmds
 		return nil
 	}
@@ -253,7 +253,7 @@ func TestRunRoot_InteractiveError(t *testing.T) {
 	origRun := interactiveRun
 	t.Cleanup(func() { interactiveRun = origRun })
 
-	interactiveRun = func(_ string, _ interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info) error {
+	interactiveRun = func(_ string, _ interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, _ bool) error {
 		return errors.New("interactive failed")
 	}
 
@@ -264,6 +264,46 @@ func TestRunRoot_InteractiveError(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "interactive failed") {
 		t.Fatalf("error = %q, want interactive error", err.Error())
+	}
+}
+
+func TestRunRoot_InteractiveMode_ExplainFlag(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.OpenAI.APIKey = "sk-test-interactive"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	origRun := interactiveRun
+	origExplain := explainFlag
+	t.Cleanup(func() {
+		interactiveRun = origRun
+		explainFlag = origExplain
+	})
+
+	var capturedExplain bool
+	interactiveRun = func(_ string, _ interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, explain bool) error {
+		capturedExplain = explain
+		return nil
+	}
+
+	debugFlag = ""
+	explainFlag = false
+	if err := runRoot(nil, nil); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+	if capturedExplain {
+		t.Fatal("explain = true, want false (default)")
+	}
+
+	explainFlag = true
+	if err := runRoot(nil, nil); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+	if !capturedExplain {
+		t.Fatal("explain = false, want true")
 	}
 }
 
