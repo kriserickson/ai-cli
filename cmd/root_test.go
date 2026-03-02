@@ -267,6 +267,46 @@ func TestRunRoot_InteractiveError(t *testing.T) {
 	}
 }
 
+func TestRunRoot_InteractiveMode_ExplainFlag(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.OpenAI.APIKey = "sk-test-interactive"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	origRun := interactiveRun
+	origExplain := explainFlag
+	t.Cleanup(func() {
+		interactiveRun = origRun
+		explainFlag = origExplain
+	})
+
+	var capturedExplain bool
+	interactiveRun = func(_ string, _ interactive.BuiltinCommands, _ *config.Config, _ llm.Client, _ shell.Info, explain bool) error {
+		capturedExplain = explain
+		return nil
+	}
+
+	debugFlag = ""
+	explainFlag = false
+	if err := runRoot(nil, nil); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+	if capturedExplain {
+		t.Fatal("explain = true, want false (default)")
+	}
+
+	explainFlag = true
+	if err := runRoot(nil, nil); err != nil {
+		t.Fatalf("runRoot() error: %v", err)
+	}
+	if !capturedExplain {
+		t.Fatal("explain = false, want true")
+	}
+}
+
 func TestRunRoot_DebugFileError(t *testing.T) {
 	tempHome(t)
 	cfg := config.DefaultConfig()

@@ -347,3 +347,42 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 		t.Fatalf("output missing Bye!\n%s", out)
 	}
 }
+
+func TestRun_ExplainFlagPropagated(t *testing.T) {
+	stubReplHooks(t)
+	replConfigDir = func() (string, error) { return t.TempDir(), nil }
+	rl := &fakeReadline{
+		steps: []fakeReadlineStep{
+			{line: "do something"},
+			{line: "exit"},
+		},
+	}
+	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
+
+	var capturedPromptExplain bool
+	replBuildSystemPrompt = func(_, _, _, _ string, explain, _ bool) string {
+		capturedPromptExplain = explain
+		return "sys"
+	}
+
+	var capturedHandleExplain bool
+	replHandleResponse = func(_ *llm.Response, _ *config.Config, _ shell.Info, explain bool) error {
+		capturedHandleExplain = explain
+		return nil
+	}
+
+	client := fakeClient{chat: func(_, _ string) (*llm.Response, error) {
+		return &llm.Response{Type: "commands"}, nil
+	}}
+
+	if err := Run("dev", BuiltinCommands{}, testCfg(t), client, shell.Info{}, true); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+
+	if !capturedPromptExplain {
+		t.Fatal("replBuildSystemPrompt: explain = false, want true")
+	}
+	if !capturedHandleExplain {
+		t.Fatal("replHandleResponse: explain = false, want true")
+	}
+}
