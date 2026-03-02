@@ -53,6 +53,14 @@ func runStatus(_ *cobra.Command, _ []string) error {
 
 	fmt.Printf("Provider: %s\n", cfg.Provider.Default)
 	fmt.Printf("Model:    %s\n", cfg.Provider.Model)
+	fmt.Printf("Debug:    %s\n", cfg.Debug)
+	if cfg.Debug == config.DebugFile {
+		if cfg.DebugLogPayloads {
+			fmt.Printf("Log Data: full payloads enabled\n")
+		} else {
+			fmt.Printf("Log Data: metadata only\n")
+		}
+	}
 
 	shellInfo := shell.Detect()
 	fmt.Printf("Shell:    %s  (%s)\n", shellInfo.Shell, shellInfo.Version)

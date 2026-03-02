@@ -160,7 +160,7 @@ func TestFilterEnvironment(t *testing.T) {
 		"MY_PASSWORD":           "[REDACTED]",
 		"PRIVATE_DATA":          "[REDACTED]",
 		"CREDENTIAL_FILE":       "[REDACTED]",
-		"NORMAL_VAR":            "hello",
+		"NORMAL_VAR":            "[VALUE HIDDEN]",
 	}
 
 	for _, v := range filtered {

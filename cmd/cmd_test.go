@@ -86,6 +86,7 @@ func TestGetConfigValue(t *testing.T) {
 		{"min_certainty", "80"},
 		{"allowlist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
 		{"debug", "none"},
+		{"debug_log_payloads", "false"},
 	}
 	for _, tt := range tests {
 		got, err := getConfigValue(cfg, tt.key)
@@ -207,6 +208,8 @@ func TestSetConfigValue(t *testing.T) {
 		{"debug", "screen", func(c *config.Config) bool { return c.Debug == "screen" }},
 		{"debug", "file", func(c *config.Config) bool { return c.Debug == "file" }},
 		{"debug", "none", func(c *config.Config) bool { return c.Debug == "none" }},
+		{"debug_log_payloads", "true", func(c *config.Config) bool { return c.DebugLogPayloads }},
+		{"debug_log_payloads", "false", func(c *config.Config) bool { return !c.DebugLogPayloads }},
 	}
 	for _, tt := range tests {
 		cfg := config.DefaultConfig()
@@ -227,6 +230,7 @@ func TestSetConfigValue_Validation(t *testing.T) {
 	}{
 		{"provider", "gpt"},         // invalid provider name
 		{"debug", "verbose"},        // invalid debug mode
+		{"debug_log_payloads", "1"}, // invalid bool-like value
 		{"min_certainty", "notnum"}, // not a number
 		{"min_certainty", "-1"},     // out of range
 		{"min_certainty", "101"},    // out of range
@@ -257,6 +261,13 @@ func TestVersionCommand(t *testing.T) {
 func TestConfigShow(t *testing.T) {
 	tempHome(t)
 
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.OpenAI.APIKey = "sk-secret-openai"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("config.Save: %v", err)
+	}
+
 	out, err := runCmd(t, "config", "show")
 	if err != nil {
 		t.Fatalf("config show error: %v", err)
@@ -265,6 +276,12 @@ func TestConfigShow(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("config show output missing %q\nfull output:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "sk-secret-openai") {
+		t.Fatalf("config show leaked raw API key:\n%s", out)
+	}
+	if !strings.Contains(out, config.RedactSecret("sk-secret-openai")) {
+		t.Fatalf("config show should contain masked API key:\n%s", out)
 	}
 }
 
@@ -439,6 +456,29 @@ func TestConfigShow_ContainsAllSections(t *testing.T) {
 	}
 }
 
+func TestConfigShow_RedactsAllProviderKeys(t *testing.T) {
+	tempHome(t)
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.OpenAI.APIKey = "sk-openai-secret"
+	cfg.Provider.OpenRouter.APIKey = "sk-openrouter-secret"
+	cfg.Provider.Local.APIKey = "local-secret"
+	if err := config.Save(cfg); err != nil {
+		t.Fatalf("config.Save: %v", err)
+	}
+
+	out, err := runCmd(t, "config", "show")
+	if err != nil {
+		t.Fatalf("config show error: %v", err)
+	}
+
+	for _, raw := range []string{"sk-openai-secret", "sk-openrouter-secret", "local-secret"} {
+		if strings.Contains(out, raw) {
+			t.Fatalf("config show leaked raw secret %q:\n%s", raw, out)
+		}
+	}
+}
+
 func TestConfigSet_DebugValue(t *testing.T) {
 	tempHome(t)
 
@@ -452,6 +492,22 @@ func TestConfigSet_DebugValue(t *testing.T) {
 	}
 	if !strings.Contains(out, "screen") {
 		t.Errorf("config get debug = %q, want 'screen'", strings.TrimSpace(out))
+	}
+}
+
+func TestConfigSet_DebugLogPayloads(t *testing.T) {
+	tempHome(t)
+
+	if _, err := runCmd(t, "config", "set", "debug_log_payloads", "true"); err != nil {
+		t.Fatalf("config set debug_log_payloads: %v", err)
+	}
+
+	out, err := runCmd(t, "config", "get", "debug_log_payloads")
+	if err != nil {
+		t.Fatalf("config get debug_log_payloads: %v", err)
+	}
+	if !strings.Contains(out, "true") {
+		t.Errorf("config get debug_log_payloads = %q, want 'true'", strings.TrimSpace(out))
 	}
 }
 

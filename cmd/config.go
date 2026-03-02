@@ -22,14 +22,16 @@ var configKeys = []string{
 	"tool_calling",
 	"min_certainty",
 	"debug",
+	"debug_log_payloads",
 }
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	"provider":       {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	"always_confirm": {"true", "false"},
-	"tool_calling":   {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
-	"debug":          {config.DebugNone, config.DebugScreen, config.DebugFile},
+	"provider":           {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	"always_confirm":     {"true", "false"},
+	"tool_calling":       {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
+	"debug":              {config.DebugNone, config.DebugScreen, config.DebugFile},
+	"debug_log_payloads": {"true", "false"},
 }
 
 func init() {
@@ -47,7 +49,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				data, err := toml.Marshal(cfg)
+				data, err := toml.Marshal(config.RedactedCopy(cfg))
 				if err != nil {
 					return err
 				}
@@ -143,6 +145,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return strings.Join(cfg.Safety.AllowlistPrefixes, ", "), nil
 	case "debug":
 		return cfg.Debug, nil
+	case "debug_log_payloads":
+		return strconv.FormatBool(cfg.DebugLogPayloads), nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
 	}
@@ -186,15 +190,18 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("debug must be '%s', '%s', or '%s'", config.DebugNone, config.DebugScreen, config.DebugFile)
 		}
 		cfg.Debug = value
+	case "debug_log_payloads":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("debug_log_payloads %w", err)
+		}
+		cfg.DebugLogPayloads = b
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, debug_log_payloads", key)
 	}
 	return nil
 }
 
 func maskKey(key string) string {
-	if len(key) <= 8 {
-		return "****"
-	}
-	return key[:4] + "..." + key[len(key)-4:]
+	return config.RedactSecret(key)
 }

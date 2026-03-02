@@ -81,7 +81,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 
 	// No args: interactive mode
 	if len(args) == 0 {
-		client, err := llm.NewClient(cfg, debugOut)
+		client, err := llm.NewClient(cfg, debugOut, debugMode)
 		if err != nil {
 			return err
 		}
@@ -105,7 +105,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 				}
 				switch args[0] {
 				case "show":
-					data, err := toml.Marshal(cfg)
+					data, err := toml.Marshal(config.RedactedCopy(cfg))
 					if err != nil {
 						return err
 					}
@@ -172,7 +172,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 	// Single-shot mode
 	instruction := strings.Join(args, " ")
 
-	client, err := llm.NewClient(cfg, debugOut)
+	client, err := llm.NewClient(cfg, debugOut, debugMode)
 	if err != nil {
 		return err
 	}
@@ -213,7 +213,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 }
 
 func handleConfig(resp *llm.Response, cfg *config.Config) error {
-	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
+	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, config.DisplayValue(resp.Action, resp.Key, resp.Value))
 	fmt.Print("Apply? [Y/n] ")
 	var input string
 	_, _ = fmt.Scanln(&input)

@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -15,6 +17,30 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
+
+func captureCmdOutput(t *testing.T, fn func()) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+
+	oldStdout := os.Stdout
+	os.Stdout = w
+	defer func() {
+		os.Stdout = oldStdout
+	}()
+
+	fn()
+
+	_ = w.Close()
+
+	var buf bytes.Buffer
+	_, _ = io.Copy(&buf, r)
+	_ = r.Close()
+	return buf.String()
+}
 
 func withCmdStdin(t *testing.T, input string, fn func()) {
 	t.Helper()
@@ -423,4 +449,24 @@ func TestHandleConfig(t *testing.T) {
 			}
 		})
 	})
+}
+
+func TestHandleConfig_RedactsDisplayedKeyValue(t *testing.T) {
+	tempHome(t)
+	cfg := config.DefaultConfig()
+
+	out := captureCmdOutput(t, func() {
+		withCmdStdin(t, "n\n", func() {
+			if err := handleConfig(&llm.Response{Action: "set_key", Key: "llm_key", Value: "sk-super-secret-1234"}, cfg); err != nil {
+				t.Fatalf("handleConfig() error: %v", err)
+			}
+		})
+	})
+
+	if strings.Contains(out, "sk-super-secret-1234") {
+		t.Fatalf("handleConfig leaked raw key in output: %q", out)
+	}
+	if !strings.Contains(out, config.RedactSecret("sk-super-secret-1234")) {
+		t.Fatalf("handleConfig should show masked key in output: %q", out)
+	}
 }

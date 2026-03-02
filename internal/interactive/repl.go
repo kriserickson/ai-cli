@@ -179,7 +179,7 @@ func handleResponse(resp *llm.Response, cfg *config.Config, shellInfo shell.Info
 }
 
 func applyConfig(resp *llm.Response, cfg *config.Config) error {
-	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
+	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, config.DisplayValue(resp.Action, resp.Key, resp.Value))
 	fmt.Print("Apply? [Y/n] ")
 	var input string
 	_, _ = fmt.Scanln(&input)

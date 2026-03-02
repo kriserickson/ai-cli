@@ -168,6 +168,7 @@ func TestExecute_CheckCommand_NotFound(t *testing.T) {
 }
 
 func TestExecute_Environment(t *testing.T) {
+	t.Setenv("PATH", "visible-path")
 	t.Setenv("TEST_SAFE_VAR", "visible")
 	t.Setenv("TEST_API_KEY", "should_be_hidden")
 
@@ -176,24 +177,27 @@ func TestExecute_Environment(t *testing.T) {
 		t.Fatalf("Execute error: %v", err)
 	}
 
-	// The environment can be large and might be truncated.
-	// We check for our variables anywhere in the output.
-	if !strings.Contains(output, "TEST_SAFE_VAR=visible") {
+	if !strings.Contains(output, "PATH=visible-path") {
 		t.Logf("Environment output: %s", output)
-		t.Error("expected safe var to be visible")
+		t.Error("expected allowlisted env var to be visible")
 	}
-	// Sensitive values must never appear in the raw form
 	if strings.Contains(output, "should_be_hidden") {
 		t.Error("expected API_KEY value to be redacted")
 	}
-	// Test filtering logic directly with a controlled input (avoids output-truncation flakiness)
+	if !strings.Contains(output, "TEST_SAFE_VAR=[VALUE HIDDEN]") {
+		t.Error("expected unknown env var values to be hidden")
+	}
 	filtered := FilterEnvironment([]string{
+		"PATH=visible-path",
 		"TEST_SAFE_VAR=visible",
 		"TEST_API_KEY=should_be_hidden",
 	})
 	filteredOut := strings.Join(filtered, "\n")
-	if !strings.Contains(filteredOut, "TEST_SAFE_VAR=visible") {
-		t.Error("expected safe var to be visible")
+	if !strings.Contains(filteredOut, "PATH=visible-path") {
+		t.Error("expected allowlisted env var to be visible")
+	}
+	if !strings.Contains(filteredOut, "TEST_SAFE_VAR=[VALUE HIDDEN]") {
+		t.Error("expected unknown env var value to be hidden")
 	}
 	if !strings.Contains(filteredOut, "TEST_API_KEY=[REDACTED]") {
 		t.Error("expected API_KEY to show [REDACTED]")
