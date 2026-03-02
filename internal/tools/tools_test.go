@@ -155,12 +155,9 @@ func TestExecute_CheckCommand(t *testing.T) {
 }
 
 func TestExecute_CheckCommand_NotFound(t *testing.T) {
-	output, err := Execute("check_command", map[string]string{"command": "nonexistent_command_xyz"}, shell.Info{})
-	if err != nil {
-		t.Fatalf("Execute error: %v", err)
-	}
-	if output == "" {
-		t.Errorf("expected some output for nonexistent command, got empty string")
+	_, err := Execute("check_command", map[string]string{"command": "nonexistent_command_xyz"}, shell.Info{})
+	if err == nil {
+		t.Fatal("Execute should have returned error for nonexistent command")
 	}
 }
 

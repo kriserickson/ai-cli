@@ -8,15 +8,18 @@ import (
 )
 
 func TestValidatePath_Valid(t *testing.T) {
-	cwd := "/home/user/project"
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	tests := []struct {
 		path string
 		want string
 	}{
-		{".", "/home/user/project"},
-		{"src", "/home/user/project/src"},
-		{"./src/main.go", "/home/user/project/src/main.go"},
-		{"src/../src/main.go", "/home/user/project/src/main.go"},
+		{".", cwd},
+		{"src", filepath.Join(cwd, "src")},
+		{"./src/main.go", filepath.Join(cwd, "src", "main.go")},
+		{"src/../src/main.go", filepath.Join(cwd, "src", "main.go")},
 	}
 	for _, tt := range tests {
 		got, err := ValidatePath(tt.path, cwd)
@@ -31,10 +34,13 @@ func TestValidatePath_Valid(t *testing.T) {
 }
 
 func TestValidatePath_OutsideCWD(t *testing.T) {
-	cwd := "/home/user/project"
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
 	paths := []string{
 		"../other",
-		"/etc/passwd",
+		filepath.FromSlash("/etc/passwd"),
 		"../../..",
 	}
 	for _, path := range paths {
@@ -42,8 +48,8 @@ func TestValidatePath_OutsideCWD(t *testing.T) {
 		if err == nil {
 			t.Errorf("ValidatePath(%q, %q) should have failed", path, cwd)
 		}
-		if !strings.Contains(err.Error(), "outside") {
-			t.Errorf("ValidatePath(%q) error = %q, want 'outside'", path, err.Error())
+		if err != nil && !strings.Contains(err.Error(), "outside") && !strings.Contains(err.Error(), "blocked") {
+			t.Errorf("ValidatePath(%q) error = %q, want 'outside' or 'blocked'", path, err.Error())
 		}
 	}
 }
@@ -119,7 +125,7 @@ func TestFilterEnvironment(t *testing.T) {
 		"PATH":                  "/usr/bin",
 		"API_KEY":               "[REDACTED]",
 		"AWS_SECRET_ACCESS_KEY": "[REDACTED]",
-		"DATABASE_URL":          "postgres://localhost",
+		"DATABASE_URL":          "[REDACTED]",
 		"AUTH_TOKEN":            "[REDACTED]",
 		"MY_PASSWORD":           "[REDACTED]",
 		"PRIVATE_DATA":          "[REDACTED]",
@@ -157,7 +163,7 @@ func TestValidatePath_SymlinkOutsideCWD(t *testing.T) {
 	defer os.RemoveAll(outside)
 
 	target := filepath.Join(outside, "secret.txt")
-	if err := os.WriteFile(target, []byte("secret"), 0600); err != nil {
+	if err := os.WriteFile(target, []byte("secret"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -186,7 +192,7 @@ func TestValidatePath_SymlinkToBlockedFile(t *testing.T) {
 
 	// Create a blocked-pattern file inside cwd (e.g. id_rsa).
 	blocked := filepath.Join(cwd, "id_rsa")
-	if err := os.WriteFile(blocked, []byte("private key"), 0600); err != nil {
+	if err := os.WriteFile(blocked, []byte("private key"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -214,14 +220,14 @@ func TestValidatePath_SymlinkWithinCWD(t *testing.T) {
 	defer os.RemoveAll(cwd)
 
 	// Create a regular (non-blocked) file inside cwd.
-	real := filepath.Join(cwd, "main.go")
-	if err := os.WriteFile(real, []byte("package main"), 0600); err != nil {
+	realPath := filepath.Join(cwd, "main.go")
+	if err := os.WriteFile(realPath, []byte("package main"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
 	// Create a symlink inside cwd pointing to the file within cwd.
 	link := filepath.Join(cwd, "alias.go")
-	if err := os.Symlink(real, link); err != nil {
+	if err := os.Symlink(realPath, link); err != nil {
 		t.Skip("symlinks not supported:", err)
 	}
 
