@@ -49,7 +49,8 @@ Valid config actions: set_model, set_provider, set_key, set_safety, set_history
 - set_provider: key="default", value="openai", "openrouter", or "local"
 - set_key: key="llm_key" (sets key on current provider), value="the-key"
 - set_safety: key="always_confirm" or "min_certainty", value="true"/"false" or number
-- set_history: key is one of "include_llm_output", "include_debug", "ask_on_error", "auto_check_on_error", "retry_max_attempts", "retry_context_depth"`
+- set_history: key is one of "include_llm_output", "include_debug", "ask_on_error", "auto_check_on_error", "retry_max_attempts", "retry_context_depth"
+`
 
 const darwinHints = `
 Platform-specific rules (macOS / Darwin):
