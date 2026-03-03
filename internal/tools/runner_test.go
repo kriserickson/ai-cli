@@ -32,7 +32,6 @@ func (m *mockClient) ChatWithTrace(systemPrompt, userMessage string) (*llm.ChatR
 	}
 	return &llm.ChatResult{Response: resp}, nil
 }
-
 func (m *mockClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
 	idx := m.calls
 	m.calls++
@@ -116,14 +115,20 @@ func TestRunWithTools_AlwaysAllowMode_NoPrompt(t *testing.T) {
 	// Verify tool result was injected
 	lastMessages := client.messages[1]
 	found := false
+	foundGuardrail := false
 	for _, m := range lastMessages {
 		if strings.Contains(m.Content, "Tool result for check_command") {
 			found = true
-			break
+		}
+		if m.Role == "system" && strings.Contains(m.Content, "untrusted data") {
+			foundGuardrail = true
 		}
 	}
 	if !found {
 		t.Error("expected tool result in follow-up messages")
+	}
+	if !foundGuardrail {
+		t.Error("expected prompt-injection guardrail in follow-up messages")
 	}
 }
 
@@ -208,6 +213,37 @@ func TestRunWithTools_DangerousPromptMode_SafeToolNoPrompt(t *testing.T) {
 	}
 }
 
+func TestRunWithTools_DangerousPromptMode_SensitiveToolPrompts(t *testing.T) {
+	promptCalled := false
+	confirm := func(tool string, _ map[string]string, reason string) bool {
+		promptCalled = true
+		if tool != "environment" {
+			t.Fatalf("tool = %q, want environment", tool)
+		}
+		if reason == "" {
+			t.Fatal("expected sensitive-tool reason")
+		}
+		return true
+	}
+
+	client := &mockClient{
+		responses: []*llm.Response{
+			{Type: "tool_request", Tool: "environment", ToolArgs: map[string]string{}},
+			{Type: "commands", Commands: []llm.Command{{Command: "env", Description: "show env", Risk: "safe", Certainty: 90}}},
+		},
+	}
+
+	resp, err := runWithTools(client, "system", "show env", toolCallingCfg(config.ToolCallingDangerousPrompt), shell.Info{}, 3, confirm)
+	if err != nil {
+		t.Fatalf("RunWithTools error: %v", err)
+	}
+	if resp.Type != "commands" {
+		t.Errorf("type = %q, want commands", resp.Type)
+	}
+	if !promptCalled {
+		t.Fatal("expected dangerous_prompt mode to prompt for environment tool")
+	}
+}
 func TestRunWithTools_UnknownToolCallingMode(t *testing.T) {
 	client := &mockClient{
 		responses: []*llm.Response{

@@ -34,9 +34,13 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 			return nil, nil, fmt.Errorf("cannot determine config dir for log: %w", err)
 		}
 		logPath := filepath.Join(dir, "llm.log")
-		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
 		if err != nil {
 			return nil, nil, fmt.Errorf("cannot open log file %s: %w", logPath, err)
+		}
+		if err := os.Chmod(logPath, 0o600); err != nil {
+			_ = f.Close()
+			return nil, nil, fmt.Errorf("cannot secure log file %s: %w", logPath, err)
 		}
 		return f, func() { _ = f.Close() }, nil
 	default:
@@ -44,7 +48,7 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 	}
 }
 
-func NewClient(cfg *config.Config, debugOut io.Writer) (Client, error) {
+func NewClient(cfg *config.Config, debugOut io.Writer, debugMode string) (Client, error) {
 	var baseURL, apiKey string
 
 	switch cfg.Provider.Default {
@@ -56,12 +60,14 @@ func NewClient(cfg *config.Config, debugOut io.Writer) (Client, error) {
 		apiKey = cfg.Provider.OpenRouter.APIKey
 	case config.ProviderLocal:
 		return &ollamaClient{
-			provider:   cfg.Provider.Default,
-			baseURL:    strings.TrimRight(cfg.Provider.Local.BaseURL, "/"),
-			apiKey:     cfg.Provider.Local.APIKey,
-			model:      cfg.Provider.Model,
-			debugOut:   debugOut,
-			httpClient: &http.Client{Timeout: 120 * time.Second},
+			provider:        cfg.Provider.Default,
+			baseURL:         strings.TrimRight(cfg.Provider.Local.BaseURL, "/"),
+			apiKey:          cfg.Provider.Local.APIKey,
+			model:           cfg.Provider.Model,
+			debugOut:        debugOut,
+			debugMode:       debugMode,
+			debugLogPayload: cfg.DebugLogPayloads,
+			httpClient:      &http.Client{Timeout: 120 * time.Second},
 		}, nil
 	default:
 		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider.Default)
@@ -72,22 +78,26 @@ func NewClient(cfg *config.Config, debugOut io.Writer) (Client, error) {
 	}
 
 	return &openAIClient{
-		provider:   cfg.Provider.Default,
-		baseURL:    strings.TrimRight(baseURL, "/"),
-		apiKey:     apiKey,
-		model:      cfg.Provider.Model,
-		debugOut:   debugOut,
-		httpClient: &http.Client{Timeout: 60 * time.Second},
+		provider:        cfg.Provider.Default,
+		baseURL:         strings.TrimRight(baseURL, "/"),
+		apiKey:          apiKey,
+		model:           cfg.Provider.Model,
+		debugOut:        debugOut,
+		debugMode:       debugMode,
+		debugLogPayload: cfg.DebugLogPayloads,
+		httpClient:      &http.Client{Timeout: 60 * time.Second},
 	}, nil
 }
 
 type openAIClient struct {
-	provider   string
-	baseURL    string
-	apiKey     string
-	model      string
-	debugOut   io.Writer
-	httpClient *http.Client
+	provider        string
+	baseURL         string
+	apiKey          string
+	model           string
+	debugOut        io.Writer
+	debugMode       string
+	debugLogPayload bool
+	httpClient      *http.Client
 }
 
 func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error) {
@@ -132,9 +142,13 @@ func (c *openAIClient) chatWithMessages(messages []Message) (*ChatResult, error)
 	}
 
 	if c.debugOut != nil {
-		prettyReq, _ := json.MarshalIndent(req, "", "  ")
 		ts := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s/chat/completions\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
+		if c.shouldLogPayloads() {
+			prettyReq, _ := json.MarshalIndent(req, "", "  ")
+			fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s/chat/completions\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
+		} else {
+			fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s/chat/completions\nmodel=%s messages=%d payload=logging disabled; set debug_log_payloads=true to opt in\n--- END REQUEST ---\n\n", ts, c.baseURL, c.model, len(messages))
+		}
 	}
 
 	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
@@ -160,7 +174,11 @@ func (c *openAIClient) chatWithMessages(messages []Message) (*ChatResult, error)
 
 	if c.debugOut != nil {
 		ts := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		if c.shouldLogPayloads() {
+			fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		} else {
+			fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE ---\nHTTP %d bytes=%d payload=logging disabled; set debug_log_payloads=true to opt in\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, len(respBody))
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -192,12 +210,14 @@ func (c *openAIClient) chatWithMessages(messages []Message) (*ChatResult, error)
 
 // ollamaClient implements the Client interface for Ollama-compatible local servers.
 type ollamaClient struct {
-	provider   string
-	baseURL    string
-	apiKey     string
-	model      string
-	debugOut   io.Writer
-	httpClient *http.Client
+	provider        string
+	baseURL         string
+	apiKey          string
+	model           string
+	debugOut        io.Writer
+	debugMode       string
+	debugLogPayload bool
+	httpClient      *http.Client
 }
 
 type ollamaRequest struct {
@@ -274,9 +294,13 @@ func (c *ollamaClient) chatWithMessages(messages []Message) (*ChatResult, error)
 	}
 
 	if c.debugOut != nil {
-		prettyReq, _ := json.MarshalIndent(req, "", "  ")
 		ts := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
+		if c.shouldLogPayloads() {
+			prettyReq, _ := json.MarshalIndent(req, "", "  ")
+			fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s\n%s\n--- END REQUEST ---\n\n", ts, c.baseURL, string(prettyReq))
+		} else {
+			fmt.Fprintf(c.debugOut, "\n[%s] --- REQUEST ---\nPOST %s\nmodel=%s prompt_messages=%d payload=logging disabled; set debug_log_payloads=true to opt in\n--- END REQUEST ---\n\n", ts, c.baseURL, c.model, len(messages))
+		}
 	}
 
 	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.baseURL, bytes.NewReader(body))
@@ -304,7 +328,11 @@ func (c *ollamaClient) chatWithMessages(messages []Message) (*ChatResult, error)
 
 	if c.debugOut != nil {
 		ts := time.Now().Format("2006-01-02 15:04:05")
-		fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		if c.shouldLogPayloads() {
+			fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE (HTTP %d) ---\n%s\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, strings.TrimSpace(string(respBody)))
+		} else {
+			fmt.Fprintf(c.debugOut, "\n[%s] --- RESPONSE ---\nHTTP %d bytes=%d payload=logging disabled; set debug_log_payloads=true to opt in\n--- END RESPONSE ---\n\n", ts, resp.StatusCode, len(respBody))
+		}
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -350,4 +378,12 @@ func parseResponse(content string) (*Response, error) {
 	}
 
 	return &resp, nil
+}
+
+func (c *openAIClient) shouldLogPayloads() bool {
+	return c.debugMode != config.DebugFile || c.debugLogPayload
+}
+
+func (c *ollamaClient) shouldLogPayloads() bool {
+	return c.debugMode != config.DebugFile || c.debugLogPayload
 }

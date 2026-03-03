@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -47,6 +49,17 @@ func TestDebugWriter_File(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Write error: %v", err)
 	}
+
+	if runtime.GOOS != "windows" {
+		logPath := filepath.Join(tmpDir, ".ai-cli", "llm.log")
+		info, err := os.Stat(logPath)
+		if err != nil {
+			t.Fatalf("Stat: %v", err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("llm.log mode = %o, want %o", got, 0o600)
+		}
+	}
 }
 
 func TestDebugWriter_None(t *testing.T) {
@@ -76,7 +89,7 @@ func TestNewClient_OpenRouterProvider(t *testing.T) {
 	cfg.Provider.Default = "openrouter"
 	cfg.Provider.OpenRouter.APIKey = "sk-or-test"
 
-	client, err := NewClient(cfg, nil)
+	client, err := NewClient(cfg, nil, "")
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -90,7 +103,7 @@ func TestNewClient_MissingAPIKey(t *testing.T) {
 	cfg.Provider.Default = "openai"
 	cfg.Provider.OpenAI.APIKey = ""
 
-	_, err := NewClient(cfg, nil)
+	_, err := NewClient(cfg, nil, "")
 	if err == nil {
 		t.Fatal("expected error for missing API key")
 	}
@@ -103,7 +116,7 @@ func TestNewClient_UnknownProvider(t *testing.T) {
 	cfg := config.DefaultConfig()
 	cfg.Provider.Default = "invalid"
 
-	_, err := NewClient(cfg, nil)
+	_, err := NewClient(cfg, nil, "")
 	if err == nil {
 		t.Fatal("expected error for unknown provider")
 	}
@@ -146,7 +159,7 @@ func TestChat_Success(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "test-key"
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
-	client, err := NewClient(cfg, nil)
+	client, err := NewClient(cfg, nil, "")
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -175,7 +188,7 @@ func TestChat_APIError(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "bad-key"
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
-	client, err := NewClient(cfg, nil)
+	client, err := NewClient(cfg, nil, "")
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -206,7 +219,7 @@ func TestChat_DebugOutput(t *testing.T) {
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
 	var buf strings.Builder
-	client, err := NewClient(cfg, &buf)
+	client, err := NewClient(cfg, &buf, config.DebugScreen)
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -228,6 +241,77 @@ func TestChat_DebugOutput(t *testing.T) {
 	}
 }
 
+func TestChat_DebugFileOmitsPayloadsByDefault(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		chatResp := ChatResponse{
+			Choices: []Choice{{Message: Message{Content: `{"type":"commands","commands":[{"command":"pwd","description":"d","risk":"safe","certainty":99}]}`}}},
+		}
+		if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "openai"
+	cfg.Provider.OpenAI.APIKey = "test-key"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+	cfg.DebugLogPayloads = false
+
+	var buf strings.Builder
+	client, err := NewClient(cfg, &buf, config.DebugFile)
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	_, err = client.Chat("sys prompt secret", "user prompt secret")
+	if err != nil {
+		t.Fatalf("Chat error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "sys prompt secret") || strings.Contains(output, "user prompt secret") {
+		t.Fatalf("debug file output leaked request payload: %q", output)
+	}
+	if !strings.Contains(output, "payload=logging disabled") {
+		t.Fatalf("debug file output should indicate payloads are disabled: %q", output)
+	}
+}
+
+func TestChat_DebugFileCanOptIntoPayloads(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		chatResp := ChatResponse{
+			Choices: []Choice{{Message: Message{Content: `{"type":"commands","commands":[{"command":"pwd","description":"d","risk":"safe","certainty":99}]}`}}},
+		}
+		if err := json.NewEncoder(w).Encode(chatResp); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "openai"
+	cfg.Provider.OpenAI.APIKey = "test-key"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+	cfg.DebugLogPayloads = true
+
+	var buf strings.Builder
+	client, err := NewClient(cfg, &buf, config.DebugFile)
+	if err != nil {
+		t.Fatalf("NewClient error: %v", err)
+	}
+
+	_, err = client.Chat("sys prompt secret", "user prompt secret")
+	if err != nil {
+		t.Fatalf("Chat error: %v", err)
+	}
+
+	output := buf.String()
+	if !strings.Contains(output, "sys prompt secret") || !strings.Contains(output, "user prompt secret") {
+		t.Fatalf("debug file output should include payloads when opted in: %q", output)
+	}
+}
+
 func TestChat_EmptyChoices(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		chatResp := ChatResponse{Choices: []Choice{}}
@@ -242,7 +326,7 @@ func TestChat_EmptyChoices(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "test-key"
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for empty choices")
@@ -268,7 +352,7 @@ func TestChat_APIErrorInBody(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "test-key"
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for API error in body")
@@ -289,7 +373,7 @@ func TestChat_InvalidJSONResponse(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "test-key"
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON response")
@@ -313,7 +397,7 @@ func TestChat_InvalidLLMResponseJSON(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "test-key"
 	cfg.Provider.OpenAI.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for invalid LLM response JSON")
@@ -330,7 +414,7 @@ func TestNewClient_LocalProvider(t *testing.T) {
 	cfg.Provider.Default = "local"
 	cfg.Provider.Local.BaseURL = "http://localhost:11434/api/generate"
 
-	client, err := NewClient(cfg, nil)
+	client, err := NewClient(cfg, nil, "")
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -378,7 +462,7 @@ func TestOllamaChat_Success(t *testing.T) {
 	cfg.Provider.Default = "local"
 	cfg.Provider.Local.BaseURL = server.URL
 
-	client, err := NewClient(cfg, nil)
+	client, err := NewClient(cfg, nil, "")
 	if err != nil {
 		t.Fatalf("NewClient error: %v", err)
 	}
@@ -410,7 +494,7 @@ func TestOllamaChat_WithAPIKey(t *testing.T) {
 	cfg.Provider.Local.BaseURL = server.URL
 	cfg.Provider.Local.APIKey = "local-key"
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err != nil {
 		t.Fatalf("Chat error: %v", err)
@@ -432,7 +516,7 @@ func TestOllamaChat_NoAPIKey_NoAuthHeader(t *testing.T) {
 	cfg.Provider.Local.BaseURL = server.URL
 	cfg.Provider.Local.APIKey = ""
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err != nil {
 		t.Fatalf("Chat error: %v", err)
@@ -450,7 +534,7 @@ func TestOllamaChat_HTTPError(t *testing.T) {
 	cfg.Provider.Default = "local"
 	cfg.Provider.Local.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for 500 response")
@@ -471,7 +555,7 @@ func TestOllamaChat_OllamaError(t *testing.T) {
 	cfg.Provider.Default = "local"
 	cfg.Provider.Local.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for ollama error response")
@@ -491,7 +575,7 @@ func TestOllamaChat_InvalidJSON(t *testing.T) {
 	cfg.Provider.Default = "local"
 	cfg.Provider.Local.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for invalid JSON")
@@ -513,7 +597,7 @@ func TestOllamaChat_DebugOutput(t *testing.T) {
 	cfg.Provider.Local.BaseURL = server.URL
 
 	var buf strings.Builder
-	client, _ := NewClient(cfg, &buf)
+	client, _ := NewClient(cfg, &buf, config.DebugScreen)
 
 	_, err := client.Chat("sys", "test")
 	if err != nil {
@@ -529,6 +613,35 @@ func TestOllamaChat_DebugOutput(t *testing.T) {
 	}
 }
 
+func TestOllamaChat_DebugFileOmitsPayloadsByDefault(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		ollamaResp := ollamaResponse{Response: `{"type":"commands","commands":[{"command":"pwd","description":"d","risk":"safe","certainty":99}]}`, Done: true}
+		_ = json.NewEncoder(w).Encode(ollamaResp)
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = "local"
+	cfg.Provider.Local.BaseURL = server.URL
+	cfg.DebugLogPayloads = false
+
+	var buf strings.Builder
+	client, _ := NewClient(cfg, &buf, config.DebugFile)
+
+	_, err := client.Chat("sys prompt secret", "user prompt secret")
+	if err != nil {
+		t.Fatalf("Chat error: %v", err)
+	}
+
+	output := buf.String()
+	if strings.Contains(output, "sys prompt secret") || strings.Contains(output, "user prompt secret") {
+		t.Fatalf("ollama debug file output leaked payload: %q", output)
+	}
+	if !strings.Contains(output, "payload=logging disabled") {
+		t.Fatalf("expected metadata-only debug file output: %q", output)
+	}
+}
+
 func TestOllamaChat_InvalidLLMResponseJSON(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		ollamaResp := ollamaResponse{Response: "not valid json", Done: true}
@@ -540,7 +653,7 @@ func TestOllamaChat_InvalidLLMResponseJSON(t *testing.T) {
 	cfg.Provider.Default = "local"
 	cfg.Provider.Local.BaseURL = server.URL
 
-	client, _ := NewClient(cfg, nil)
+	client, _ := NewClient(cfg, nil, "")
 	_, err := client.Chat("sys", "test")
 	if err == nil {
 		t.Fatal("expected error for invalid LLM response JSON")

@@ -231,7 +231,7 @@ Notes:
 
 - `tool_calling` only controls AI tool usage
 - generated shell commands still follow `always_confirm`, `min_certainty`, risk classification, and the allowlist
-- `dangerous_prompt` only prompts when a tool call hits a safety rule, such as trying to read a restricted path
+- `dangerous_prompt` prompts when a tool call hits a safety rule, including restricted file access and sensitive tools like `environment` or `list_memories`
 - `never` makes AI CLI skip the tool loop entirely and respond directly
 
 ## Memories
@@ -386,6 +386,7 @@ Available `ai config get/set` keys:
 | `history_auto_check_on_error` | Automatically ask the AI to retry on failure (`true`/`false`) | `false` |
 | `history_retry_max_attempts` | Automatic AI retries after a failed command | `1` |
 | `history_retry_context_depth` | Number of recent command results to send back on retry | `3` |
+| `debug_log_payloads` | When `debug=file`, include full prompts and responses in `llm.log` (`true`/`false`) | `false` |
 
 Notes:
 
@@ -399,6 +400,7 @@ Notes:
 # Persisted config
 ai config set debug screen
 ai config set debug file
+ai config set debug_log_payloads true   # opt in to full prompt/response capture for debug=file
 
 # Per-command override
 ai --debug list files
@@ -429,6 +431,21 @@ ai --retry-on-error --retry-depth 5 fix the broken command
 ai history list
 ai history show 1741012345678901
 ```
+
+Notes:
+
+- `debug=screen` prints request and response payloads to the terminal for the current session
+- `debug=file` writes to `~/.ai-cli/llm.log`
+- `debug=file` logs metadata only by default; full prompt and response bodies require `debug_log_payloads=true`
+- `llm.log` is created with user-only permissions
+
+## Security Notes
+
+- `ai config show` and `ai config get llm_key` mask stored API keys
+- tool output is treated as untrusted data before it is sent back to the model
+- the `environment` tool shows all variable names, but only a small allowlisted subset of values; all other values are hidden or redacted
+- memories and environment data can still be sensitive, so `dangerous_prompt` asks before using those tools
+- enabling `debug=file` can still store sensitive data if you also set `debug_log_payloads=true`
 
 ## Multi-Step Commands
 

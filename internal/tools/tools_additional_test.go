@@ -94,6 +94,12 @@ func TestCheckToolSafety(t *testing.T) {
 	if got := checkToolSafety("read_file", map[string]string{"path": ".env"}); !strings.Contains(got, "blocked") {
 		t.Fatalf("checkToolSafety(blocked file) = %q, want blocked message", got)
 	}
+	if got := checkToolSafety("environment", nil); !strings.Contains(got, "sensitive") {
+		t.Fatalf("checkToolSafety(environment) = %q, want sensitive warning", got)
+	}
+	if got := checkToolSafety("list_memories", nil); !strings.Contains(got, "sensitive") {
+		t.Fatalf("checkToolSafety(list_memories) = %q, want sensitive warning", got)
+	}
 }
 
 func TestExecListDirectory_OutsideCWD(t *testing.T) {
@@ -261,7 +267,9 @@ func TestExecCommandHelp_FallsBackFromTldrToMan(t *testing.T) {
 }
 
 func TestExecListMemories_WithEntries(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	if err := memory.Save([]memory.Entry{
 		{Keyword: "server", Content: "ssh user@example.com"},

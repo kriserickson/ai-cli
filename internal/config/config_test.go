@@ -45,6 +45,9 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.History.RetryContextDepth != 3 {
 		t.Errorf("history.retry_context_depth = %d, want 3", cfg.History.RetryContextDepth)
 	}
+	if cfg.DebugLogPayloads {
+		t.Error("debug_log_payloads should default to false")
+	}
 	if len(cfg.Safety.AllowlistPrefixes) == 0 {
 		t.Error("allowlist should not be empty by default")
 	}
@@ -56,6 +59,53 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
+func TestRedactSecret(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{input: "", want: ""},
+		{input: "short", want: "****"},
+		{input: "12345678", want: "****"},
+		{input: "123456789", want: "1234...6789"},
+	}
+
+	for _, tt := range tests {
+		if got := RedactSecret(tt.input); got != tt.want {
+			t.Errorf("RedactSecret(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestRedactedCopy(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider.OpenAI.APIKey = "sk-openai-secret"
+	cfg.Provider.OpenRouter.APIKey = "sk-openrouter-secret"
+	cfg.Provider.Local.APIKey = "local-secret"
+
+	redacted := RedactedCopy(cfg)
+	if redacted.Provider.OpenAI.APIKey != RedactSecret("sk-openai-secret") {
+		t.Fatalf("openai key = %q", redacted.Provider.OpenAI.APIKey)
+	}
+	if redacted.Provider.OpenRouter.APIKey != RedactSecret("sk-openrouter-secret") {
+		t.Fatalf("openrouter key = %q", redacted.Provider.OpenRouter.APIKey)
+	}
+	if redacted.Provider.Local.APIKey != RedactSecret("local-secret") {
+		t.Fatalf("local key = %q", redacted.Provider.Local.APIKey)
+	}
+	if cfg.Provider.OpenAI.APIKey != "sk-openai-secret" {
+		t.Fatal("RedactedCopy should not mutate original config")
+	}
+}
+
+func TestDisplayValue(t *testing.T) {
+	if got := DisplayValue("set_key", "llm_key", "sk-secret-1234"); got == "sk-secret-1234" {
+		t.Fatal("DisplayValue should redact sensitive values")
+	}
+	if got := DisplayValue("set_model", "model", "gpt-4o"); got != "gpt-4o" {
+		t.Fatalf("DisplayValue(model) = %q, want %q", got, "gpt-4o")
+	}
+}
 func TestValidToolCallingMode(t *testing.T) {
 	validModes := []string{
 		ToolCallingNever,
@@ -99,6 +149,7 @@ func TestSaveAndLoad(t *testing.T) {
 	cfg.Debug = "file"
 	cfg.History.IncludeDebug = true
 	cfg.History.RetryContextDepth = 5
+	cfg.DebugLogPayloads = true
 
 	if err := Save(cfg); err != nil {
 		t.Fatalf("Save error: %v", err)
@@ -140,6 +191,9 @@ func TestSaveAndLoad(t *testing.T) {
 	if loaded.History.RetryContextDepth != 5 {
 		t.Errorf("loaded history.retry_context_depth = %d, want 5", loaded.History.RetryContextDepth)
 	}
+	if !loaded.DebugLogPayloads {
+		t.Error("loaded debug_log_payloads = false, want true")
+	}
 }
 
 func TestLoad_CreatesDefaultOnMissing(t *testing.T) {
@@ -171,6 +225,7 @@ func TestLoad_WhitelistMigration(t *testing.T) {
 	// Write a config with whitelist_prefixes (deprecated) and no allowlist_prefixes.
 	tomlContent := `
 debug = "none"
+debug_log_payloads = true
 
 [provider]
 default = "openrouter"
@@ -352,6 +407,7 @@ func TestLoad_PreservesExistingValues(t *testing.T) {
 	// Write a minimal config with some custom values
 	customToml := `
 debug = "file"
+debug_log_payloads = true
 
 [provider]
 default = "openai"
@@ -392,6 +448,9 @@ allowlist_prefixes = ["git", "ls"]
 	}
 	if cfg.Debug != "file" {
 		t.Errorf("debug = %q, want file", cfg.Debug)
+	}
+	if !cfg.DebugLogPayloads {
+		t.Error("debug_log_payloads should be true")
 	}
 	if !cfg.Safety.AlwaysConfirm {
 		t.Error("always_confirm should be true")

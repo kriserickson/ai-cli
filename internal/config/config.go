@@ -25,10 +25,11 @@ const (
 )
 
 type Config struct {
-	Provider ProviderConfig `toml:"provider"`
-	Safety   SafetyConfig   `toml:"safety"`
-	History  HistoryConfig  `toml:"history"`
-	Debug    string         `toml:"debug"` // "none", "screen", or "file"
+	Provider         ProviderConfig `toml:"provider"`
+	Safety           SafetyConfig   `toml:"safety"`
+	History          HistoryConfig  `toml:"history"`
+	Debug            string         `toml:"debug"`              // "none", "screen", or "file"
+	DebugLogPayloads bool           `toml:"debug_log_payloads"` // Only used for debug=file
 }
 
 type ProviderConfig struct {
@@ -99,7 +100,8 @@ func DefaultConfig() *Config {
 			RetryMaxAttempts:  1,
 			RetryContextDepth: 3,
 		},
-		Debug: DebugNone,
+		Debug:            DebugNone,
+		DebugLogPayloads: false,
 	}
 }
 

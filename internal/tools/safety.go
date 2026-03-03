@@ -47,6 +47,34 @@ var sensitiveEnvKeys = []string{
 	"DSN",
 }
 
+// safeEnvValueKeys lists environment variable names whose values are useful for
+// command generation and generally non-secret. Unknown keys are shown by name
+// only to avoid leaking poorly named secrets.
+var safeEnvValueKeys = map[string]struct{}{
+	"COLORTERM":    {},
+	"COMPUTERNAME": {},
+	"COMSPEC":      {},
+	"EDITOR":       {},
+	"HOME":         {},
+	"HOSTNAME":     {},
+	"LANG":         {},
+	"NO_COLOR":     {},
+	"OS":           {},
+	"PATH":         {},
+	"PATHEXT":      {},
+	"PWD":          {},
+	"SHELL":        {},
+	"SYSTEMROOT":   {},
+	"TEMP":         {},
+	"TERM":         {},
+	"TMP":          {},
+	"TZ":           {},
+	"USER":         {},
+	"USERNAME":     {},
+	"VISUAL":       {},
+	"WINDIR":       {},
+}
+
 // ValidatePath resolves path to an absolute path and checks that it is
 // contained within cwd and does not match any blocked pattern.
 // It also resolves symlinks and re-validates the resolved path to prevent
@@ -58,7 +86,6 @@ func ValidatePath(path, cwd string) (string, error) {
 		cwdResolved = filepath.Clean(resolved)
 	}
 
-	// Resolve relative to cwd.
 	var abs string
 	if filepath.IsAbs(path) {
 		abs = filepath.Clean(path)
@@ -66,14 +93,12 @@ func ValidatePath(path, cwd string) (string, error) {
 		abs = filepath.Clean(filepath.Join(cwdClean, path))
 	}
 
-	// Ensure the lexical path is under the working directory. Allow either the
-	// original cwd or its canonicalized form to support symlinked temp roots
-	// such as /var -> /private/var on macOS.
+	// Allow either the lexical cwd or its resolved path to support symlinked
+	// temp roots such as /var -> /private/var on macOS.
 	if !withinPath(abs, cwdClean) && !withinPath(abs, cwdResolved) {
 		return "", fmt.Errorf("path %q is outside the working directory", path)
 	}
 
-	// Check blocked patterns against the lexical relative path.
 	rel, err := relativeToBase(abs, cwdClean, cwdResolved)
 	if err != nil {
 		return "", fmt.Errorf("cannot compute relative path: %w", err)
@@ -82,9 +107,6 @@ func ValidatePath(path, cwd string) (string, error) {
 		return "", fmt.Errorf("access to %q is blocked for security", path)
 	}
 
-	// Resolve symlinks and re-validate the resolved path to prevent symlink
-	// attacks where a path within cwd points to a target outside cwd or to
-	// a blocked file.
 	resolved, err := filepath.EvalSymlinks(abs)
 	if err == nil {
 		resolvedClean := filepath.Clean(resolved)
@@ -120,12 +142,10 @@ func relativeToBase(path string, bases ...string) (string, error) {
 
 // isBlocked checks if any component of the relative path matches a blocked pattern.
 func isBlocked(relPath string) bool {
-	// Normalize separators
 	normalized := filepath.ToSlash(relPath)
 	parts := strings.Split(normalized, "/")
 
 	for _, pattern := range blockedPatterns {
-		// Directory pattern (ends with /)
 		if strings.HasSuffix(pattern, "/") {
 			dirName := strings.TrimSuffix(pattern, "/")
 			for _, part := range parts {
@@ -136,10 +156,8 @@ func isBlocked(relPath string) bool {
 			continue
 		}
 
-		// Check the final component (filename)
 		filename := parts[len(parts)-1]
 
-		// Glob-style pattern (starts with *)
 		if strings.HasPrefix(pattern, "*") {
 			suffix := pattern[1:]
 			if strings.HasSuffix(strings.ToLower(filename), strings.ToLower(suffix)) {
@@ -148,7 +166,6 @@ func isBlocked(relPath string) bool {
 			continue
 		}
 
-		// Prefix match (e.g., "id_rsa" matches "id_rsa", "id_rsa.pub")
 		if strings.HasPrefix(strings.ToLower(filename), strings.ToLower(pattern)) {
 			return true
 		}
@@ -156,8 +173,9 @@ func isBlocked(relPath string) bool {
 	return false
 }
 
-// FilterEnvironment takes a list of "KEY=VALUE" strings and returns
-// a filtered copy where sensitive values are replaced with [REDACTED].
+// FilterEnvironment takes a list of "KEY=VALUE" strings and returns a filtered
+// copy where only a safe allowlist of values is shown. Sensitive values are
+// replaced with [REDACTED]; all other values are hidden as [VALUE HIDDEN].
 func FilterEnvironment(vars []string) []string {
 	result := make([]string, 0, len(vars))
 	for _, v := range vars {
@@ -169,10 +187,17 @@ func FilterEnvironment(vars []string) []string {
 		value := parts[1]
 
 		upperKey := strings.ToUpper(key)
+		valueShown := false
 		for _, sensitive := range sensitiveEnvKeys {
 			if strings.Contains(upperKey, sensitive) {
 				value = "[REDACTED]"
+				valueShown = true
 				break
+			}
+		}
+		if !valueShown {
+			if _, ok := safeEnvValueKeys[upperKey]; !ok {
+				value = "[VALUE HIDDEN]"
 			}
 		}
 		result = append(result, key+"="+value)

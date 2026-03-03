@@ -28,6 +28,7 @@ var configKeys = []string{
 	"history_auto_check_on_error",
 	"history_retry_max_attempts",
 	"history_retry_context_depth",
+	"debug_log_payloads",
 }
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
@@ -40,6 +41,7 @@ var configKeyValues = map[string][]string{
 	"history_include_debug":       {"true", "false"},
 	"history_ask_on_error":        {"true", "false"},
 	"history_auto_check_on_error": {"true", "false"},
+	"debug_log_payloads":          {"true", "false"},
 }
 
 func init() {
@@ -57,7 +59,7 @@ func init() {
 				if err != nil {
 					return err
 				}
-				data, err := toml.Marshal(cfg)
+				data, err := toml.Marshal(config.RedactedCopy(cfg))
 				if err != nil {
 					return err
 				}
@@ -165,6 +167,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return strconv.Itoa(cfg.History.RetryMaxAttempts), nil
 	case "history_retry_context_depth":
 		return strconv.Itoa(cfg.History.RetryContextDepth), nil
+	case "debug_log_payloads":
+		return strconv.FormatBool(cfg.DebugLogPayloads), nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
 	}
@@ -250,15 +254,18 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return errors.New("history_retry_context_depth must be greater than 0")
 		}
 		cfg.History.RetryContextDepth = n
+	case "debug_log_payloads":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("debug_log_payloads %w", err)
+		}
+		cfg.DebugLogPayloads = b
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, history_include_llm_output, history_include_debug, history_ask_on_error, history_auto_check_on_error, history_retry_max_attempts, history_retry_context_depth", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, history_include_llm_output, history_include_debug, history_ask_on_error, history_auto_check_on_error, history_retry_max_attempts, history_retry_context_depth, debug_log_payloads", key)
 	}
 	return nil
 }
 
 func maskKey(key string) string {
-	if len(key) <= 8 {
-		return "****"
-	}
-	return key[:4] + "..." + key[len(key)-4:]
+	return config.RedactSecret(key)
 }
