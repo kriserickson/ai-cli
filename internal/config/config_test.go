@@ -106,6 +106,7 @@ func TestDisplayValue(t *testing.T) {
 		t.Fatalf("DisplayValue(model) = %q, want %q", got, "gpt-4o")
 	}
 }
+
 func TestValidToolCallingMode(t *testing.T) {
 	validModes := []string{
 		ToolCallingNever,

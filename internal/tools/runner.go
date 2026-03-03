@@ -13,6 +13,8 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
+const environmentToolName = "environment"
+
 type confirmFunc func(toolName string, args map[string]string, reason string) bool
 
 func defaultConfirm(toolName string, args map[string]string, reason string) bool {
@@ -140,7 +142,7 @@ func checkToolSafety(toolName string, args map[string]string) string {
 		if err != nil {
 			return fmt.Sprintf("path %q triggers safety rule: %s", path, err.Error())
 		}
-	case "environment":
+	case environmentToolName:
 		return "environment output may contain sensitive local configuration and secret-adjacent metadata"
 	case "list_memories":
 		return "stored memories may contain credentials, hosts, or other sensitive user context"

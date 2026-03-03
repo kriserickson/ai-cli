@@ -32,6 +32,7 @@ func (m *mockClient) ChatWithTrace(systemPrompt, userMessage string) (*llm.ChatR
 	}
 	return &llm.ChatResult{Response: resp}, nil
 }
+
 func (m *mockClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
 	idx := m.calls
 	m.calls++
@@ -244,6 +245,7 @@ func TestRunWithTools_DangerousPromptMode_SensitiveToolPrompts(t *testing.T) {
 		t.Fatal("expected dangerous_prompt mode to prompt for environment tool")
 	}
 }
+
 func TestRunWithTools_UnknownToolCallingMode(t *testing.T) {
 	client := &mockClient{
 		responses: []*llm.Response{
