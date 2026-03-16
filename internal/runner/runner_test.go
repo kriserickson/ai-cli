@@ -388,7 +388,13 @@ func TestRetryPromptBranches(t *testing.T) {
 	if got := r.shouldRetry(session, true); got {
 		t.Fatal("shouldRetry(auto maxed) = true, want false")
 	}
+	// retry_max_attempts=0 means disabled; auto-retry must not trigger even when AutoCheckOnError=true
+	cfg.History.RetryMaxAttempts = 0
 	cfg.History.AskOnError = false
+	session.RetryCount = 0
+	if got := r.shouldRetry(session, false); got {
+		t.Fatal("shouldRetry(auto, max=0) = true, want false")
+	}
 	cfg.History.AutoCheckOnError = false
 	if got := r.shouldRetry(session, false); got {
 		t.Fatal("shouldRetry(ask disabled) = true, want false")

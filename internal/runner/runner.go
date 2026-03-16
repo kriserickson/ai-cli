@@ -179,7 +179,7 @@ func (r *Runner) retrySession(session *history.Session, systemPrompt string, dep
 
 func (r *Runner) shouldRetry(session *history.Session, autoTriggered bool) bool {
 	if r.cfg.History.AutoCheckOnError {
-		if r.cfg.History.RetryMaxAttempts <= 0 || session.RetryCount < r.cfg.History.RetryMaxAttempts {
+		if r.cfg.History.RetryMaxAttempts > 0 && session.RetryCount < r.cfg.History.RetryMaxAttempts {
 			return true
 		}
 	}
