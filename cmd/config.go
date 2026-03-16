@@ -22,16 +22,26 @@ var configKeys = []string{
 	"tool_calling",
 	"min_certainty",
 	"debug",
+	"history_include_llm_output",
+	"history_include_debug",
+	"history_ask_on_error",
+	"history_auto_check_on_error",
+	"history_retry_max_attempts",
+	"history_retry_context_depth",
 	"debug_log_payloads",
 }
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	"provider":           {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	"always_confirm":     {"true", "false"},
-	"tool_calling":       {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
-	"debug":              {config.DebugNone, config.DebugScreen, config.DebugFile},
-	"debug_log_payloads": {"true", "false"},
+	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	"always_confirm":              {"true", "false"},
+	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
+	"debug":                       {config.DebugNone, config.DebugScreen, config.DebugFile},
+	"history_include_llm_output":  {"true", "false"},
+	"history_include_debug":       {"true", "false"},
+	"history_ask_on_error":        {"true", "false"},
+	"history_auto_check_on_error": {"true", "false"},
+	"debug_log_payloads":          {"true", "false"},
 }
 
 func init() {
@@ -145,6 +155,18 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return strings.Join(cfg.Safety.AllowlistPrefixes, ", "), nil
 	case "debug":
 		return cfg.Debug, nil
+	case "history_include_llm_output":
+		return strconv.FormatBool(cfg.History.IncludeLLMOutput), nil
+	case "history_include_debug":
+		return strconv.FormatBool(cfg.History.IncludeDebug), nil
+	case "history_ask_on_error":
+		return strconv.FormatBool(cfg.History.AskOnError), nil
+	case "history_auto_check_on_error":
+		return strconv.FormatBool(cfg.History.AutoCheckOnError), nil
+	case "history_retry_max_attempts":
+		return strconv.Itoa(cfg.History.RetryMaxAttempts), nil
+	case "history_retry_context_depth":
+		return strconv.Itoa(cfg.History.RetryContextDepth), nil
 	case "debug_log_payloads":
 		return strconv.FormatBool(cfg.DebugLogPayloads), nil
 	default:
@@ -190,6 +212,48 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("debug must be '%s', '%s', or '%s'", config.DebugNone, config.DebugScreen, config.DebugFile)
 		}
 		cfg.Debug = value
+	case "history_include_llm_output":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("history_include_llm_output %w", err)
+		}
+		cfg.History.IncludeLLMOutput = b
+	case "history_include_debug":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("history_include_debug %w", err)
+		}
+		cfg.History.IncludeDebug = b
+	case "history_ask_on_error":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("history_ask_on_error %w", err)
+		}
+		cfg.History.AskOnError = b
+	case "history_auto_check_on_error":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("history_auto_check_on_error %w", err)
+		}
+		cfg.History.AutoCheckOnError = b
+	case "history_retry_max_attempts":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("history_retry_max_attempts must be a number: %w", err)
+		}
+		if n < 0 {
+			return errors.New("history_retry_max_attempts must be 0 or greater")
+		}
+		cfg.History.RetryMaxAttempts = n
+	case "history_retry_context_depth":
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("history_retry_context_depth must be a number: %w", err)
+		}
+		if n <= 0 {
+			return errors.New("history_retry_context_depth must be greater than 0")
+		}
+		cfg.History.RetryContextDepth = n
 	case "debug_log_payloads":
 		b, err := config.ParseBool(value)
 		if err != nil {
@@ -197,7 +261,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.DebugLogPayloads = b
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, debug_log_payloads", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, history_include_llm_output, history_include_debug, history_ask_on_error, history_auto_check_on_error, history_retry_max_attempts, history_retry_context_depth, debug_log_payloads", key)
 	}
 	return nil
 }

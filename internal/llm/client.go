@@ -19,6 +19,7 @@ import (
 type Client interface {
 	Chat(systemPrompt, userMessage string) (*Response, error)
 	ChatMessages(messages []Message) (*Response, error)
+	ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error)
 }
 
 // DebugWriter returns an io.Writer based on the debug mode string.
@@ -41,7 +42,7 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 			_ = f.Close()
 			return nil, nil, fmt.Errorf("cannot secure log file %s: %w", logPath, err)
 		}
-		return f, func() { f.Close() }, nil
+		return f, func() { _ = f.Close() }, nil
 	default:
 		return nil, func() {}, nil
 	}
@@ -59,6 +60,7 @@ func NewClient(cfg *config.Config, debugOut io.Writer, debugMode string) (Client
 		apiKey = cfg.Provider.OpenRouter.APIKey
 	case config.ProviderLocal:
 		return &ollamaClient{
+			provider:        cfg.Provider.Default,
 			baseURL:         strings.TrimRight(cfg.Provider.Local.BaseURL, "/"),
 			apiKey:          cfg.Provider.Local.APIKey,
 			model:           cfg.Provider.Model,
@@ -76,6 +78,7 @@ func NewClient(cfg *config.Config, debugOut io.Writer, debugMode string) (Client
 	}
 
 	return &openAIClient{
+		provider:        cfg.Provider.Default,
 		baseURL:         strings.TrimRight(baseURL, "/"),
 		apiKey:          apiKey,
 		model:           cfg.Provider.Model,
@@ -87,6 +90,7 @@ func NewClient(cfg *config.Config, debugOut io.Writer, debugMode string) (Client
 }
 
 type openAIClient struct {
+	provider        string
 	baseURL         string
 	apiKey          string
 	model           string
@@ -97,13 +101,29 @@ type openAIClient struct {
 }
 
 func (c *openAIClient) Chat(systemPrompt, userMessage string) (*Response, error) {
-	return c.ChatMessages([]Message{
+	result, err := c.ChatWithTrace(systemPrompt, userMessage)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
+func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
+	result, err := c.chatWithMessages(messages)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
+func (c *openAIClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
+	return c.chatWithMessages([]Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userMessage},
 	})
 }
 
-func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
+func (c *openAIClient) chatWithMessages(messages []Message) (*ChatResult, error) {
 	req := ChatRequest{
 		Model:    c.model,
 		Messages: messages,
@@ -112,6 +132,13 @@ func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
 		return nil, fmt.Errorf("marshal request: %w", err)
+	}
+
+	trace := ChatTrace{
+		Provider:    c.provider,
+		Model:       c.model,
+		Endpoint:    c.baseURL + "/chat/completions",
+		RequestBody: string(body),
 	}
 
 	if c.debugOut != nil {
@@ -124,7 +151,7 @@ func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 		}
 	}
 
-	httpReq, err := http.NewRequestWithContext(context.Background(), "POST", c.baseURL+"/chat/completions", bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -142,6 +169,8 @@ func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
+	trace.ResponseBody = string(respBody)
+	trace.HTTPStatus = resp.StatusCode
 
 	if c.debugOut != nil {
 		ts := time.Now().Format("2006-01-02 15:04:05")
@@ -153,7 +182,7 @@ func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return &ChatResult{Trace: trace}, fmt.Errorf("API error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	var chatResp ChatResponse
@@ -166,15 +195,22 @@ func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 	}
 
 	if len(chatResp.Choices) == 0 {
-		return nil, errors.New("no response from LLM")
+		return &ChatResult{Trace: trace}, errors.New("no response from LLM")
 	}
 
 	content := chatResp.Choices[0].Message.Content
-	return parseResponse(content)
+	trace.RawContent = content
+
+	parsed, err := parseResponse(content)
+	if err != nil {
+		return &ChatResult{Trace: trace}, err
+	}
+	return &ChatResult{Response: parsed, Trace: trace}, nil
 }
 
 // ollamaClient implements the Client interface for Ollama-compatible local servers.
 type ollamaClient struct {
+	provider        string
 	baseURL         string
 	apiKey          string
 	model           string
@@ -198,14 +234,29 @@ type ollamaResponse struct {
 }
 
 func (c *ollamaClient) Chat(systemPrompt, userMessage string) (*Response, error) {
-	return c.ChatMessages([]Message{
+	result, err := c.ChatWithTrace(systemPrompt, userMessage)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
+func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
+	result, err := c.chatWithMessages(messages)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
+func (c *ollamaClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
+	return c.chatWithMessages([]Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userMessage},
 	})
 }
 
-func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
-	// Extract system and user messages for Ollama's generate API
+func (c *ollamaClient) chatWithMessages(messages []Message) (*ChatResult, error) {
 	var system, prompt string
 	for _, m := range messages {
 		switch m.Role {
@@ -235,6 +286,13 @@ func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
 		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
+	trace := ChatTrace{
+		Provider:    c.provider,
+		Model:       c.model,
+		Endpoint:    c.baseURL,
+		RequestBody: string(body),
+	}
+
 	if c.debugOut != nil {
 		ts := time.Now().Format("2006-01-02 15:04:05")
 		if c.shouldLogPayloads() {
@@ -245,7 +303,7 @@ func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
 		}
 	}
 
-	httpReq, err := http.NewRequestWithContext(context.Background(), "POST", c.baseURL, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(context.Background(), http.MethodPost, c.baseURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
@@ -265,6 +323,8 @@ func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read response: %w", err)
 	}
+	trace.ResponseBody = string(respBody)
+	trace.HTTPStatus = resp.StatusCode
 
 	if c.debugOut != nil {
 		ts := time.Now().Format("2006-01-02 15:04:05")
@@ -276,7 +336,7 @@ func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("local server error (HTTP %d): %s", resp.StatusCode, string(respBody))
+		return &ChatResult{Trace: trace}, fmt.Errorf("local server error (HTTP %d): %s", resp.StatusCode, string(respBody))
 	}
 
 	var ollamaResp ollamaResponse
@@ -285,23 +345,27 @@ func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
 	}
 
 	if ollamaResp.Error != "" {
-		return nil, fmt.Errorf("local server error: %s", ollamaResp.Error)
+		return &ChatResult{Trace: trace}, fmt.Errorf("local server error: %s", ollamaResp.Error)
 	}
 
-	return parseResponse(ollamaResp.Response)
+	trace.RawContent = ollamaResp.Response
+
+	parsed, err := parseResponse(ollamaResp.Response)
+	if err != nil {
+		return &ChatResult{Trace: trace}, err
+	}
+	return &ChatResult{Response: parsed, Trace: trace}, nil
 }
 
 func parseResponse(content string) (*Response, error) {
 	content = strings.TrimSpace(content)
 
-	// Strip markdown code fences if present
+	// Strip markdown code fences if present.
 	if strings.HasPrefix(content, "```") {
 		lines := strings.Split(content, "\n")
-		// Remove first line (```json or ```)
 		if len(lines) > 2 {
 			lines = lines[1:]
 		}
-		// Remove last line (```)
 		if len(lines) > 0 && strings.TrimSpace(lines[len(lines)-1]) == "```" {
 			lines = lines[:len(lines)-1]
 		}

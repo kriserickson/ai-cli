@@ -15,6 +15,7 @@ You MUST respond with valid JSON only. No markdown fences, no explanation text o
 For shell command requests, respond with:
 {
   "type": "commands",
+  "explanation": "optional plain-English explanation, especially useful after a failed command",
   "commands": [
     {
       "command": "the shell command to run",
@@ -28,6 +29,7 @@ For shell command requests, respond with:
 Rules for commands:
 - "risk" must be "safe" (read-only, informational) or "risky" (modifies files, processes, system state)
 - "certainty" is 0-100, your confidence this is the correct command for what the user asked
+- "explanation" should briefly explain the plan or why the retry differs when relevant
 - For multi-step tasks, return multiple commands in order. Use shell constructs like $(...) or pipes to chain when possible
 - Generate commands appropriate for the detected OS and shell
 - Never generate commands that could cause irreversible damage without clear user intent
@@ -42,11 +44,13 @@ For requests to change AI CLI configuration (model, provider, API key, safety se
   "value": "gpt-4o"
 }
 
-Valid config actions: set_model, set_provider, set_key, set_safety
+Valid config actions: set_model, set_provider, set_key, set_safety, set_history
 - set_model: key="model", value="model-name"
 - set_provider: key="default", value="openai", "openrouter", or "local"
 - set_key: key="llm_key" (sets key on current provider), value="the-key"
-- set_safety: key="always_confirm" or "min_certainty", value="true"/"false" or number`
+- set_safety: key="always_confirm" or "min_certainty", value="true"/"false" or number
+- set_history: key is one of "include_llm_output", "include_debug", "ask_on_error", "auto_check_on_error", "retry_max_attempts", "retry_context_depth"
+`
 
 const darwinHints = `
 Platform-specific rules (macOS / Darwin):

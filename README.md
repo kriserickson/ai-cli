@@ -380,6 +380,12 @@ Available `ai config get/set` keys:
 | `tool_calling` | Tool usage mode (`never`, `always_prompt`, `dangerous_prompt`, `always_allow`) | `never` |
 | `min_certainty` | Auto-execute threshold (0-100) | `80` |
 | `debug` | Debug mode (`none`, `screen`, `file`) | `none` |
+| `history_include_llm_output` | Store structured LLM responses in history (`true`/`false`) | `true` |
+| `history_include_debug` | Store raw request/response debug payloads in history (`true`/`false`) | `false` |
+| `history_ask_on_error` | Prompt to send failures back to the AI (`true`/`false`) | `true` |
+| `history_auto_check_on_error` | Automatically ask the AI to retry on failure (`true`/`false`) | `false` |
+| `history_retry_max_attempts` | Automatic AI retries after a failed command | `1` |
+| `history_retry_context_depth` | Number of recent command results to send back on retry | `3` |
 | `debug_log_payloads` | When `debug=file`, include full prompts and responses in `llm.log` (`true`/`false`) | `false` |
 
 Notes:
@@ -402,6 +408,30 @@ ai --debug=screen list files
 ai --debug=file list files
 ```
 
+Debug output still goes to the configured debug sink (`screen` or `~/.ai-cli/llm.log`). History storage is separate and controlled by the `history_*` settings above.
+
+## History And Retry
+
+Each top-level AI instruction now writes to a rotating history log under `~/.ai-cli/history.log` with rotated backups like `history.log.1`.
+
+- New instructions start a fresh session.
+- If a generated command fails, AI CLI can prompt to send the failure back to the model with the original request, prior AI response, recent command results, exit code, and captured stdout/stderr.
+- In interactive mode, `retry` replays the last failed AI session, and `retry <depth>` overrides how many recent command results get included.
+
+Example:
+
+```sh
+ai config set history_auto_check_on_error true
+ai config set history_retry_context_depth 5
+
+# Per-command override
+ai --retry-on-error --retry-depth 5 fix the broken command
+
+# Inspect stored sessions
+ai history list
+ai history show 1741012345678901
+```
+
 Notes:
 
 - `debug=screen` prints request and response payloads to the terminal for the current session
@@ -419,7 +449,7 @@ Notes:
 
 ## Multi-Step Commands
 
-For complex requests, AI CLI may return multiple commands. They run sequentially and stop on first failure.
+For complex requests, AI CLI may return multiple commands. They run sequentially and stop on first failure unless an AI retry is triggered.
 
 ```sh
 $ ai kill the process on port 8080

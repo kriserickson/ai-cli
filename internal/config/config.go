@@ -27,6 +27,7 @@ const (
 type Config struct {
 	Provider         ProviderConfig `toml:"provider"`
 	Safety           SafetyConfig   `toml:"safety"`
+	History          HistoryConfig  `toml:"history"`
 	Debug            string         `toml:"debug"`              // "none", "screen", or "file"
 	DebugLogPayloads bool           `toml:"debug_log_payloads"` // Only used for debug=file
 }
@@ -50,6 +51,15 @@ type SafetyConfig struct {
 	MinCertainty      int      `toml:"min_certainty"`
 	AllowlistPrefixes []string `toml:"allowlist_prefixes"`
 	WhitelistPrefixes []string `toml:"whitelist_prefixes,omitempty"` // Deprecated: use allowlist_prefixes
+}
+
+type HistoryConfig struct {
+	IncludeLLMOutput  bool `toml:"include_llm_output"`
+	IncludeDebug      bool `toml:"include_debug"`
+	AskOnError        bool `toml:"ask_on_error"`
+	AutoCheckOnError  bool `toml:"auto_check_on_error"`
+	RetryMaxAttempts  int  `toml:"retry_max_attempts"`
+	RetryContextDepth int  `toml:"retry_context_depth"`
 }
 
 // ValidToolCallingMode returns true if the given mode is a valid tool_calling value.
@@ -81,6 +91,14 @@ func DefaultConfig() *Config {
 			ToolCalling:       ToolCallingNever,
 			MinCertainty:      80,
 			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
+		},
+		History: HistoryConfig{
+			IncludeLLMOutput:  true,
+			IncludeDebug:      false,
+			AskOnError:        true,
+			AutoCheckOnError:  false,
+			RetryMaxAttempts:  1,
+			RetryContextDepth: 3,
 		},
 		Debug:            DebugNone,
 		DebugLogPayloads: false,

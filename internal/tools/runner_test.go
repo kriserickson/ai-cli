@@ -25,6 +25,14 @@ func (m *mockClient) Chat(systemPrompt, userMessage string) (*llm.Response, erro
 	})
 }
 
+func (m *mockClient) ChatWithTrace(systemPrompt, userMessage string) (*llm.ChatResult, error) {
+	resp, err := m.Chat(systemPrompt, userMessage)
+	if err != nil {
+		return nil, err
+	}
+	return &llm.ChatResult{Response: resp}, nil
+}
+
 func (m *mockClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
 	idx := m.calls
 	m.calls++

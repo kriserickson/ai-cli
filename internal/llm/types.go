@@ -28,8 +28,9 @@ type APIError struct {
 
 // LLM structured response types
 type Response struct {
-	Type     string    `json:"type"`
-	Commands []Command `json:"commands,omitempty"`
+	Type        string    `json:"type"`
+	Explanation string    `json:"explanation,omitempty"`
+	Commands    []Command `json:"commands,omitempty"`
 	// Config action fields
 	Action string `json:"action,omitempty"`
 	Key    string `json:"key,omitempty"`
@@ -45,4 +46,19 @@ type Command struct {
 	Risk        string `json:"risk"`
 	Certainty   int    `json:"certainty"`
 	Explanation string `json:"explanation,omitempty"`
+}
+
+type ChatTrace struct {
+	Provider     string `json:"provider,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Endpoint     string `json:"endpoint,omitempty"`
+	RequestBody  string `json:"request_body,omitempty"`
+	ResponseBody string `json:"response_body,omitempty"`
+	RawContent   string `json:"raw_content,omitempty"`
+	HTTPStatus   int    `json:"http_status,omitempty"`
+}
+
+type ChatResult struct {
+	Response *Response
+	Trace    ChatTrace
 }

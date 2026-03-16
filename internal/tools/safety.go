@@ -80,33 +80,40 @@ var safeEnvValueKeys = map[string]struct{}{
 // It also resolves symlinks and re-validates the resolved path to prevent
 // symlink attacks that could point outside cwd or to blocked files.
 func ValidatePath(path, cwd string) (string, error) {
-	// Resolve relative to cwd
+	cwdClean := filepath.Clean(cwd)
+	cwdResolved := cwdClean
+	if resolved, err := filepath.EvalSymlinks(cwdClean); err == nil {
+		cwdResolved = filepath.Clean(resolved)
+	}
+
 	var abs string
 	if filepath.IsAbs(path) {
 		abs = filepath.Clean(path)
 	} else {
-		abs = filepath.Clean(filepath.Join(cwd, path))
+		abs = filepath.Clean(filepath.Join(cwdClean, path))
 	}
 
-	// Always use forward slashes for cross-platform consistency in tests
-	// but convert back to OS specific separators for internal checks
-	cwdClean := filepath.Clean(cwd)
-
-	// Ensure the path is under cwd
-	if abs != cwdClean && !strings.HasPrefix(abs, cwdClean+string(os.PathSeparator)) {
+	// Allow either the lexical cwd or its resolved path to support symlinked
+	// temp roots such as /var -> /private/var on macOS.
+	if !withinPath(abs, cwdClean) && !withinPath(abs, cwdResolved) {
 		return "", fmt.Errorf("path %q is outside the working directory", path)
 	}
 
-	// Resolve symlinks so that a link inside cwd pointing outside is caught.
-	// If EvalSymlinks fails (e.g. the path does not exist yet), fall back to
-	// the lexically cleaned path: no symlink can exist for a non-existent path,
-	// so the lexical containment check above is sufficient in that case.
-	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+	rel, err := relativeToBase(abs, cwdClean, cwdResolved)
+	if err != nil {
+		return "", fmt.Errorf("cannot compute relative path: %w", err)
+	}
+	if isBlocked(rel) {
+		return "", fmt.Errorf("access to %q is blocked for security", path)
+	}
+
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err == nil {
 		resolvedClean := filepath.Clean(resolved)
-		if resolvedClean != cwdClean && !strings.HasPrefix(resolvedClean, cwdClean+string(os.PathSeparator)) {
+		if !withinPath(resolvedClean, cwdResolved) {
 			return "", fmt.Errorf("path %q is outside the working directory", path)
 		}
-		resolvedRel, relErr := filepath.Rel(cwdClean, resolvedClean)
+		resolvedRel, relErr := relativeToBase(resolvedClean, cwdResolved, cwdClean)
 		if relErr != nil {
 			return "", fmt.Errorf("cannot compute relative path: %w", relErr)
 		}
@@ -116,47 +123,40 @@ func ValidatePath(path, cwd string) (string, error) {
 		return resolvedClean, nil
 	}
 
-	// Check blocked patterns against the lexical relative path
-	rel, err := filepath.Rel(cwdClean, abs)
-	if err != nil {
-		return "", fmt.Errorf("cannot compute relative path: %w", err)
-	}
-
-	if isBlocked(rel) {
-		return "", fmt.Errorf("access to %q is blocked for security", path)
-	}
-
-	// Resolve symlinks and re-validate the resolved path to prevent symlink
-	// attacks where a path within cwd points to a target outside cwd or
-	// matching a blocked pattern (e.g. safe.txt -> /etc/passwd).
-	resolved, err := filepath.EvalSymlinks(abs)
-	if err == nil {
-		resolvedClean := filepath.Clean(resolved)
-		if resolvedClean != cwdClean && !strings.HasPrefix(resolvedClean, cwdClean+string(os.PathSeparator)) {
-			return "", fmt.Errorf("path %q resolves outside the working directory", path)
-		}
-		resolvedRel, relErr := filepath.Rel(cwdClean, resolvedClean)
-		if relErr != nil {
-			return "", fmt.Errorf("cannot compute relative path for resolved symlink: %w", relErr)
-		}
-		if isBlocked(resolvedRel) {
-			return "", fmt.Errorf("access to %q is blocked for security", path)
-		}
-	}
-	// If EvalSymlinks fails (e.g. path does not exist yet), the lexical
-	// checks above are sufficient and we fall through.
-
 	return abs, nil
+}
+
+func withinPath(path, base string) bool {
+	pathClean := filepath.Clean(path)
+	baseClean := filepath.Clean(base)
+	if pathClean == baseClean {
+		return true
+	}
+	if len(pathClean) <= len(baseClean) {
+		return false
+	}
+	if !strings.HasPrefix(pathClean, baseClean) {
+		return false
+	}
+	return os.IsPathSeparator(pathClean[len(baseClean)])
+}
+
+func relativeToBase(path string, bases ...string) (string, error) {
+	for _, base := range bases {
+		if base == "" || !withinPath(path, base) {
+			continue
+		}
+		return filepath.Rel(base, path)
+	}
+	return "", fmt.Errorf("path %q is outside the working directory", path)
 }
 
 // isBlocked checks if any component of the relative path matches a blocked pattern.
 func isBlocked(relPath string) bool {
-	// Normalize separators
 	normalized := filepath.ToSlash(relPath)
 	parts := strings.Split(normalized, "/")
 
 	for _, pattern := range blockedPatterns {
-		// Directory pattern (ends with /)
 		if strings.HasSuffix(pattern, "/") {
 			dirName := strings.TrimSuffix(pattern, "/")
 			for _, part := range parts {
@@ -167,10 +167,8 @@ func isBlocked(relPath string) bool {
 			continue
 		}
 
-		// Check the final component (filename)
 		filename := parts[len(parts)-1]
 
-		// Glob-style pattern (starts with *)
 		if strings.HasPrefix(pattern, "*") {
 			suffix := pattern[1:]
 			if strings.HasSuffix(strings.ToLower(filename), strings.ToLower(suffix)) {
@@ -179,7 +177,6 @@ func isBlocked(relPath string) bool {
 			continue
 		}
 
-		// Prefix match (e.g., "id_rsa" matches "id_rsa", "id_rsa.pub")
 		if strings.HasPrefix(strings.ToLower(filename), strings.ToLower(pattern)) {
 			return true
 		}

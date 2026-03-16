@@ -10,29 +10,25 @@ import (
 	"testing"
 
 	"github.com/chzyer/readline"
-
-	"github.com/kriserickson/ai-cli/internal/config"
-	"github.com/kriserickson/ai-cli/internal/llm"
-	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
-type fakeClient struct {
-	chat         func(systemPrompt, userMessage string) (*llm.Response, error)
-	chatMessages func(messages []llm.Message) (*llm.Response, error)
+type fakeRunner struct {
+	runInstruction func(string) error
+	retryLast      func(int) error
 }
 
-func (f fakeClient) Chat(systemPrompt, userMessage string) (*llm.Response, error) {
-	if f.chat == nil {
-		return nil, errors.New("fakeClient.Chat not implemented")
+func (f fakeRunner) RunInstruction(instruction string) error {
+	if f.runInstruction == nil {
+		return nil
 	}
-	return f.chat(systemPrompt, userMessage)
+	return f.runInstruction(instruction)
 }
 
-func (f fakeClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
-	if f.chatMessages == nil {
-		return nil, errors.New("fakeClient.ChatMessages not implemented")
+func (f fakeRunner) RetryLastFailed(depth int) error {
+	if f.retryLast == nil {
+		return nil
 	}
-	return f.chatMessages(messages)
+	return f.retryLast(depth)
 }
 
 type fakeReadlineStep struct {
@@ -64,14 +60,10 @@ func stubReplHooks(t *testing.T) {
 	t.Helper()
 	oldConfigDir := replConfigDir
 	oldNewReadline := replNewReadline
-	oldBuildPrompt := replBuildSystemPrompt
-	oldHandleResponse := replHandleResponse
 
 	t.Cleanup(func() {
 		replConfigDir = oldConfigDir
 		replNewReadline = oldNewReadline
-		replBuildSystemPrompt = oldBuildPrompt
-		replHandleResponse = oldHandleResponse
 	})
 }
 
@@ -101,10 +93,7 @@ func TestRun_ConfigDirError(t *testing.T) {
 	stubReplHooks(t)
 	replConfigDir = func() (string, error) { return "", errors.New("config dir failed") }
 
-	err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
-		t.Fatal("client.Chat should not be called")
-		return nil, nil
-	}}, shell.Info{}, false)
+	err := Run("dev", BuiltinCommands{}, fakeRunner{})
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
@@ -120,10 +109,7 @@ func TestRun_ReadlineInitError(t *testing.T) {
 		return nil, errors.New("readline init failed")
 	}
 
-	err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
-		t.Fatal("client.Chat should not be called")
-		return nil, nil
-	}}, shell.Info{}, false)
+	err := Run("dev", BuiltinCommands{}, fakeRunner{})
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
@@ -149,10 +135,7 @@ func TestRun_ExitOnEOFAndInterrupt(t *testing.T) {
 			replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
 
 			out := captureOutput(t, func() {
-				err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
-					t.Fatal("client.Chat should not be called")
-					return nil, nil
-				}}, shell.Info{}, false)
+				err := Run("dev", BuiltinCommands{}, fakeRunner{})
 				if err != nil {
 					t.Fatalf("Run() error = %v, want nil", err)
 				}
@@ -174,10 +157,7 @@ func TestRun_ReadlineUnexpectedError(t *testing.T) {
 	rl := &fakeReadline{steps: []fakeReadlineStep{{err: errors.New("boom")}}}
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
 
-	err := Run("dev", BuiltinCommands{}, testCfg(t), fakeClient{chat: func(string, string) (*llm.Response, error) {
-		t.Fatal("client.Chat should not be called")
-		return nil, nil
-	}}, shell.Info{}, false)
+	err := Run("dev", BuiltinCommands{}, fakeRunner{})
 	if err == nil {
 		t.Fatal("Run() error = nil, want error")
 	}
@@ -189,7 +169,7 @@ func TestRun_ReadlineUnexpectedError(t *testing.T) {
 	}
 }
 
-func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
+func TestRun_DispatchesBuiltinsRunnerAndRetry(t *testing.T) {
 	stubReplHooks(t)
 	replConfigDir = func() (string, error) { return t.TempDir(), nil }
 	rl := &fakeReadline{
@@ -202,62 +182,47 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 			{line: "set-model"},
 			{line: "config"},
 			{line: "config show"},
+			{line: "history"},
+			{line: "history show abc123"},
 			{line: "do something"},
+			{line: "retry 4"},
 			{line: "exit"},
 		},
 	}
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
 
-	var promptArgs []string
-	replBuildSystemPrompt = func(osName, shellName, shellVersion, cwd string, _, _ bool) string {
-		promptArgs = []string{osName, shellName, shellVersion, cwd}
-		return "system-prompt"
-	}
-
-	var handled []*llm.Response
-	replHandleResponse = func(resp *llm.Response, _ *config.Config, info shell.Info, _ bool) error {
-		if info.Shell != "powershell" {
-			t.Fatalf("shellInfo not passed through: %+v", info)
-		}
-		handled = append(handled, resp)
-		return nil
-	}
-
 	statusCalls := 0
 	doctorCalls := 0
 	setModelCalls := 0
 	var configArgs [][]string
-	clientCalls := 0
-	client := fakeClient{chat: func(systemPrompt, userMessage string) (*llm.Response, error) {
-		clientCalls++
-		if systemPrompt != "system-prompt" {
-			t.Fatalf("systemPrompt = %q, want %q", systemPrompt, "system-prompt")
-		}
-		if userMessage != "do something" {
-			t.Fatalf("userMessage = %q, want %q", userMessage, "do something")
-		}
-		return &llm.Response{Type: "commands"}, nil
-	}}
+	var historyArgs [][]string
+	var runInputs []string
+	var retryDepths []int
 
 	cmds := BuiltinCommands{
-		Status: func() error { statusCalls++; return nil },
-		Doctor: func() error { doctorCalls++; return nil },
-		SetModel: func() error {
-			setModelCalls++
+		Status:   func() error { statusCalls++; return nil },
+		Doctor:   func() error { doctorCalls++; return nil },
+		SetModel: func() error { setModelCalls++; return nil },
+		ConfigRun: func(args []string) error {
+			configArgs = append(configArgs, append([]string(nil), args...))
 			return nil
 		},
-		ConfigRun: func(args []string) error {
-			cp := append([]string(nil), args...)
-			configArgs = append(configArgs, cp)
+		HistoryRun: func(args []string) error {
+			historyArgs = append(historyArgs, append([]string(nil), args...))
 			return nil
 		},
 	}
 
-	err := Run("1.2.3", cmds, testCfg(t), client, shell.Info{
-		OS:      "windows/amd64",
-		Shell:   "powershell",
-		Version: "7.5.0",
-	}, false)
+	err := Run("1.2.3", cmds, fakeRunner{
+		runInstruction: func(instruction string) error {
+			runInputs = append(runInputs, instruction)
+			return nil
+		},
+		retryLast: func(depth int) error {
+			retryDepths = append(retryDepths, depth)
+			return nil
+		},
+	})
 	if err != nil {
 		t.Fatalf("Run() error = %v", err)
 	}
@@ -267,11 +232,11 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 	if statusCalls != 1 || doctorCalls != 1 || setModelCalls != 1 {
 		t.Fatalf("builtin calls = status:%d doctor:%d set-model:%d", statusCalls, doctorCalls, setModelCalls)
 	}
-	if clientCalls != 1 {
-		t.Fatalf("client.Chat calls = %d, want 1", clientCalls)
+	if !reflect.DeepEqual(runInputs, []string{"do something"}) {
+		t.Fatalf("RunInstruction inputs = %#v", runInputs)
 	}
-	if len(handled) != 1 || handled[0].Type != "commands" {
-		t.Fatalf("handled responses = %+v, want one commands response", handled)
+	if !reflect.DeepEqual(retryDepths, []int{4}) {
+		t.Fatalf("RetryLastFailed depths = %#v", retryDepths)
 	}
 	if len(configArgs) != 2 {
 		t.Fatalf("ConfigRun call count = %d, want 2", len(configArgs))
@@ -282,12 +247,18 @@ func TestRun_DispatchesBuiltinsAndLLM(t *testing.T) {
 	if !reflect.DeepEqual(configArgs[1], []string{"show"}) {
 		t.Fatalf("ConfigRun second args = %#v, want %#v", configArgs[1], []string{"show"})
 	}
-	if !reflect.DeepEqual(promptArgs, []string{"windows/amd64", "powershell", "7.5.0", ""}) {
-		t.Fatalf("BuildSystemPrompt args = %#v", promptArgs)
+	if len(historyArgs) != 2 {
+		t.Fatalf("HistoryRun call count = %d, want 2", len(historyArgs))
+	}
+	if historyArgs[0] != nil {
+		t.Fatalf("HistoryRun first args = %#v, want nil slice for bare 'history'", historyArgs[0])
+	}
+	if !reflect.DeepEqual(historyArgs[1], []string{"show", "abc123"}) {
+		t.Fatalf("HistoryRun second args = %#v", historyArgs[1])
 	}
 }
 
-func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
+func TestRun_ContinuesAfterErrors(t *testing.T) {
 	stubReplHooks(t)
 	replConfigDir = func() (string, error) { return t.TempDir(), nil }
 	rl := &fakeReadline{
@@ -296,29 +267,16 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 			{line: "doctor"},
 			{line: "set-model"},
 			{line: "config show"},
+			{line: "history list"},
 			{line: "first ai"},
-			{line: "second ai"},
+			{line: "retry"},
 			{line: "quit"},
 		},
 	}
 	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
-	replBuildSystemPrompt = func(_, _, _, _ string, _ bool, _ bool) string { return "sys" }
 
-	handleCalls := 0
-	replHandleResponse = func(_ *llm.Response, _ *config.Config, _ shell.Info, _ bool) error {
-		handleCalls++
-		return errors.New("handle failed")
-	}
-
-	clientCalls := 0
-	client := fakeClient{chat: func(_, user string) (*llm.Response, error) {
-		clientCalls++
-		if user == "first ai" {
-			return nil, errors.New("chat failed")
-		}
-		return &llm.Response{Type: "commands"}, nil
-	}}
-
+	runCalls := 0
+	retryCalls := 0
 	cmds := BuiltinCommands{
 		Status:   func() error { return errors.New("status failed") },
 		Doctor:   func() error { return errors.New("doctor failed") },
@@ -326,10 +284,22 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 		ConfigRun: func([]string) error {
 			return errors.New("config failed")
 		},
+		HistoryRun: func([]string) error {
+			return errors.New("history failed")
+		},
 	}
 
 	out := captureOutput(t, func() {
-		if err := Run("dev", cmds, testCfg(t), client, shell.Info{}, false); err != nil {
+		if err := Run("dev", cmds, fakeRunner{
+			runInstruction: func(string) error {
+				runCalls++
+				return errors.New("runner failed")
+			},
+			retryLast: func(int) error {
+				retryCalls++
+				return errors.New("retry failed")
+			},
+		}); err != nil {
 			t.Fatalf("Run() error = %v, want nil", err)
 		}
 	})
@@ -337,52 +307,13 @@ func TestRun_ContinuesAfterBuiltinLLMAndHandleErrors(t *testing.T) {
 	if !rl.closed {
 		t.Fatal("readline.Close() was not called")
 	}
-	if clientCalls != 2 {
-		t.Fatalf("client.Chat calls = %d, want 2", clientCalls)
+	if runCalls != 1 {
+		t.Fatalf("RunInstruction calls = %d, want 1", runCalls)
 	}
-	if handleCalls != 1 {
-		t.Fatalf("handleResponse calls = %d, want 1", handleCalls)
+	if retryCalls != 1 {
+		t.Fatalf("RetryLastFailed calls = %d, want 1", retryCalls)
 	}
 	if !strings.Contains(out, "Bye!") {
 		t.Fatalf("output missing Bye!\n%s", out)
-	}
-}
-
-func TestRun_ExplainFlagPropagated(t *testing.T) {
-	stubReplHooks(t)
-	replConfigDir = func() (string, error) { return t.TempDir(), nil }
-	rl := &fakeReadline{
-		steps: []fakeReadlineStep{
-			{line: "do something"},
-			{line: "exit"},
-		},
-	}
-	replNewReadline = func(*readline.Config) (replLineReader, error) { return rl, nil }
-
-	var capturedPromptExplain bool
-	replBuildSystemPrompt = func(_, _, _, _ string, explain, _ bool) string {
-		capturedPromptExplain = explain
-		return "sys"
-	}
-
-	var capturedHandleExplain bool
-	replHandleResponse = func(_ *llm.Response, _ *config.Config, _ shell.Info, explain bool) error {
-		capturedHandleExplain = explain
-		return nil
-	}
-
-	client := fakeClient{chat: func(_, _ string) (*llm.Response, error) {
-		return &llm.Response{Type: "commands"}, nil
-	}}
-
-	if err := Run("dev", BuiltinCommands{}, testCfg(t), client, shell.Info{}, true); err != nil {
-		t.Fatalf("Run() error = %v", err)
-	}
-
-	if !capturedPromptExplain {
-		t.Fatal("replBuildSystemPrompt: explain = false, want true")
-	}
-	if !capturedHandleExplain {
-		t.Fatal("replHandleResponse: explain = false, want true")
 	}
 }

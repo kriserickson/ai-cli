@@ -252,6 +252,46 @@ func TestApplyAction_SetSafety_UnknownKey(t *testing.T) {
 	}
 }
 
+func TestApplyAction_SetHistory(t *testing.T) {
+	tests := []struct {
+		name    string
+		key     string
+		value   string
+		check   func(*Config) bool
+		wantErr bool
+	}{
+		{name: "include_llm_output", key: "include_llm_output", value: "false", check: func(c *Config) bool { return !c.History.IncludeLLMOutput }},
+		{name: "include_debug", key: "include_debug", value: "true", check: func(c *Config) bool { return c.History.IncludeDebug }},
+		{name: "ask_on_error", key: "ask_on_error", value: "false", check: func(c *Config) bool { return !c.History.AskOnError }},
+		{name: "auto_check_on_error", key: "auto_check_on_error", value: "true", check: func(c *Config) bool { return c.History.AutoCheckOnError }},
+		{name: "retry_max_attempts", key: "retry_max_attempts", value: "3", check: func(c *Config) bool { return c.History.RetryMaxAttempts == 3 }},
+		{name: "retry_context_depth", key: "retry_context_depth", value: "6", check: func(c *Config) bool { return c.History.RetryContextDepth == 6 }},
+		{name: "invalid bool", key: "include_llm_output", value: "1", wantErr: true},
+		{name: "invalid max", key: "retry_max_attempts", value: "-1", wantErr: true},
+		{name: "invalid depth", key: "retry_context_depth", value: "0", wantErr: true},
+		{name: "unknown key", key: "bogus", value: "true", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := applyTestCfg(t)
+			err := ApplyAction(cfg, "set_history", tt.key, tt.value)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if !tt.check(cfg) {
+				t.Fatalf("history config not updated for %s", tt.key)
+			}
+		})
+	}
+}
+
 func TestApplyAction_SaveError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("permission-based test not reliable on Windows")
