@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/history"
 )
 
@@ -142,7 +143,7 @@ func showHistory(id string) error {
 						fmt.Printf("    command: %s\n", command.Command)
 					}
 				case "config":
-					fmt.Printf("    config: %s %s = %s\n", exchange.Response.Action, exchange.Response.Key, exchange.Response.Value)
+					fmt.Printf("    config: %s %s = %s\n", exchange.Response.Action, exchange.Response.Key, config.DisplayValue(exchange.Response.Action, exchange.Response.Key, exchange.Response.Value))
 				}
 			}
 		}

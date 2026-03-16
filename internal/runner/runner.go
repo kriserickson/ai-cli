@@ -54,7 +54,11 @@ func New(cfg *config.Config, client llm.Client, shellInfo shell.Info, opts ...Op
 }
 
 func (r *Runner) RunInstruction(instruction string) error {
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to get current working directory: %v\n", err)
+		cwd = ""
+	}
 	systemPrompt := llm.BuildSystemPrompt(r.shellInfo.OS, r.shellInfo.Shell, r.shellInfo.Version, cwd, r.explain, r.toolsEnabled())
 	systemPrompt = r.appendMemories(systemPrompt, instruction)
 
@@ -222,7 +226,9 @@ func (r *Runner) appendMemories(systemPrompt, instruction string) string {
 }
 
 func (r *Runner) saveSession(session *history.Session) {
-	_ = history.Save(session)
+	if err := history.Save(session); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to save session history: %v\n", err)
+	}
 }
 
 func (r *Runner) toolsEnabled() bool {
@@ -230,7 +236,8 @@ func (r *Runner) toolsEnabled() bool {
 }
 
 func applyConfig(resp *llm.Response, cfg *config.Config) error {
-	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, resp.Value)
+	displayValue := config.DisplayValue(resp.Action, resp.Key, resp.Value)
+	fmt.Printf("Config change: %s %s = %s\n", resp.Action, resp.Key, displayValue)
 	fmt.Print("Apply? [Y/n] ")
 	var input string
 	_, _ = fmt.Scanln(&input)

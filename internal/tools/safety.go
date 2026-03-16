@@ -127,7 +127,18 @@ func ValidatePath(path, cwd string) (string, error) {
 }
 
 func withinPath(path, base string) bool {
-	return path == base || strings.HasPrefix(path, base+string(os.PathSeparator))
+	pathClean := filepath.Clean(path)
+	baseClean := filepath.Clean(base)
+	if pathClean == baseClean {
+		return true
+	}
+	if len(pathClean) <= len(baseClean) {
+		return false
+	}
+	if !strings.HasPrefix(pathClean, baseClean) {
+		return false
+	}
+	return os.IsPathSeparator(pathClean[len(baseClean)])
 }
 
 func relativeToBase(path string, bases ...string) (string, error) {

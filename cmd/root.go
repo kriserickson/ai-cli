@@ -44,7 +44,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
-	rootCmd.Flags().BoolVar(&retryOnErrorFlag, "retry-on-error", false, "Automatically send failed commands back to the AI for one-shot retries")
+	rootCmd.Flags().BoolVar(&retryOnErrorFlag, "retry-on-error", false, "Automatically send failed commands back to the AI for retry (uses history.retry_max_attempts for attempt limit)")
 	rootCmd.Flags().IntVar(&retryDepthFlag, "retry-depth", 0, "Override how many recent command results are included in AI retry context")
 	// When --debug is given without a value, default to config.DebugScreen
 	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
