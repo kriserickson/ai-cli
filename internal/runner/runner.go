@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +32,9 @@ type Runner struct {
 	shellInfo  shell.Info
 	explain    bool
 	lastFailed *history.Session
+	// interactive-mode conversation state (nil = single-shot mode)
+	conversationHistory []llm.Message
+	lastResponse        *llm.Response
 }
 
 type Option func(*Runner)
@@ -38,6 +42,13 @@ type Option func(*Runner)
 func WithExplain(explain bool) Option {
 	return func(r *Runner) {
 		r.explain = explain
+	}
+}
+
+// WithInteractive enables multi-turn conversation history for interactive (REPL) mode.
+func WithInteractive() Option {
+	return func(r *Runner) {
+		r.conversationHistory = make([]llm.Message, 0)
 	}
 }
 
@@ -54,6 +65,15 @@ func New(cfg *config.Config, client llm.Client, shellInfo shell.Info, opts ...Op
 }
 
 func (r *Runner) RunInstruction(instruction string) error {
+	// "explain this" shortcut: replay the last AI explanation without an API call.
+	if r.lastResponse != nil && r.lastResponse.Explanation != "" {
+		lower := strings.ToLower(strings.TrimSpace(instruction))
+		if strings.HasPrefix(lower, "explain this") {
+			fmt.Println(r.lastResponse.Explanation)
+			return nil
+		}
+	}
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to get current working directory: %v\n", err)
@@ -62,8 +82,17 @@ func (r *Runner) RunInstruction(instruction string) error {
 	systemPrompt := llm.BuildSystemPrompt(r.shellInfo.OS, r.shellInfo.Shell, r.shellInfo.Version, cwd, r.explain, r.toolsEnabled())
 	systemPrompt = r.appendMemories(systemPrompt, instruction)
 
+	// In interactive mode, build a full message array that includes prior conversation turns.
+	var messages []llm.Message
+	if r.conversationHistory != nil {
+		messages = make([]llm.Message, 0, 1+len(r.conversationHistory)+1)
+		messages = append(messages, llm.Message{Role: "system", Content: systemPrompt})
+		messages = append(messages, r.conversationHistory...)
+		messages = append(messages, llm.Message{Role: "user", Content: instruction})
+	}
+
 	session := history.NewSession(instruction, cwd, r.cfg, r.shellInfo)
-	return r.runSession(session, systemPrompt, instruction, "initial", false, r.cfg.History.RetryContextDepth)
+	return r.runSession(session, systemPrompt, messages, instruction, "initial", false, r.cfg.History.RetryContextDepth)
 }
 
 func (r *Runner) RetryLastFailed(depth int) error {
@@ -94,7 +123,10 @@ func ParseRetryDepth(input string) (int, error) {
 	return depth, nil
 }
 
-func (r *Runner) runSession(session *history.Session, systemPrompt, userMessage, kind string, autoRetry bool, depth int) error {
+// runSession sends the request to the LLM and handles the response.
+// When messages is non-nil it is passed to the LLM directly (interactive mode with
+// conversation history); otherwise systemPrompt+userMessage are used (single-shot or retry).
+func (r *Runner) runSession(session *history.Session, systemPrompt string, messages []llm.Message, userMessage, kind string, autoRetry bool, depth int) error {
 	attempt := session.RetryCount + 1
 
 	var (
@@ -103,12 +135,24 @@ func (r *Runner) runSession(session *history.Session, systemPrompt, userMessage,
 	)
 	if r.toolsEnabled() {
 		var resp *llm.Response
-		resp, err = tools.RunWithTools(r.client, systemPrompt, userMessage, r.cfg, r.shellInfo, 3)
+		if messages != nil {
+			resp, err = tools.RunWithMessages(r.client, messages, r.cfg, r.shellInfo, 3)
+		} else {
+			resp, err = tools.RunWithTools(r.client, systemPrompt, userMessage, r.cfg, r.shellInfo, 3)
+		}
 		if resp != nil {
 			chatResult = &llm.ChatResult{Response: resp}
 		}
 	} else {
-		chatResult, err = r.client.ChatWithTrace(systemPrompt, userMessage)
+		if messages != nil {
+			var resp *llm.Response
+			resp, err = r.client.ChatMessages(messages)
+			if resp != nil {
+				chatResult = &llm.ChatResult{Response: resp}
+			}
+		} else {
+			chatResult, err = r.client.ChatWithTrace(systemPrompt, userMessage)
+		}
 	}
 	session.RecordExchange(kind, attempt, systemPrompt, userMessage, chatResult, err, r.cfg.History)
 	r.saveSession(session)
@@ -134,6 +178,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt, userMessage,
 			session.MarkStatus("completed")
 			r.lastFailed = nil
 			r.saveSession(session)
+			r.updateConversationHistory(userMessage, resp, kind)
 			return nil
 		}
 
@@ -156,6 +201,15 @@ func (r *Runner) runSession(session *history.Session, systemPrompt, userMessage,
 		session.MarkStatus("completed")
 		r.lastFailed = nil
 		r.saveSession(session)
+		r.updateConversationHistory(userMessage, resp, kind)
+		return nil
+	case "explanation":
+		// Print the explanation as primary output (not faint) since it is the complete response.
+		fmt.Println(resp.Explanation)
+		session.MarkStatus("completed")
+		r.lastFailed = nil
+		r.saveSession(session)
+		r.updateConversationHistory(userMessage, resp, kind)
 		return nil
 	default:
 		session.MarkStatus("failed")
@@ -173,7 +227,8 @@ func (r *Runner) retrySession(session *history.Session, systemPrompt string, dep
 
 	session.RetryCount++
 	message := history.BuildRetryMessage(session, depth)
-	err := r.runSession(session, systemPrompt, message, "retry", auto, depth)
+	// Retry messages are self-contained; pass nil messages to avoid injecting stale history.
+	err := r.runSession(session, systemPrompt, nil, message, "retry", auto, depth)
 	if err != nil {
 		r.lastFailed = session
 		return err
@@ -223,6 +278,26 @@ func (r *Runner) appendMemories(systemPrompt, instruction string) string {
 		contexts[i] = llm.MemoryContext{Keyword: m.Keyword, Content: m.Content}
 	}
 	return llm.AppendMemories(systemPrompt, contexts)
+}
+
+// updateConversationHistory records the latest user/assistant exchange in the
+// conversation history so subsequent turns have context.  It also updates
+// lastResponse for the "explain this" shortcut.
+// Only "initial" kind turns are appended; retry turns use a self-contained message.
+func (r *Runner) updateConversationHistory(userMessage string, resp *llm.Response, kind string) {
+	r.lastResponse = resp
+	if r.conversationHistory == nil || kind != "initial" {
+		return
+	}
+	data, err := json.Marshal(resp)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to serialize response for conversation history: %v\n", err)
+		return
+	}
+	r.conversationHistory = append(r.conversationHistory,
+		llm.Message{Role: "user", Content: userMessage},
+		llm.Message{Role: "assistant", Content: string(data)},
+	)
 }
 
 func (r *Runner) saveSession(session *history.Session) {

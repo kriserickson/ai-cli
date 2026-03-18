@@ -95,7 +95,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		instructionRunner := runner.New(cfg, client, shellInfo, runner.WithExplain(explainFlag))
+		instructionRunner := runner.New(cfg, client, shellInfo, runner.WithExplain(explainFlag), runner.WithInteractive())
 		cmds := interactive.BuiltinCommands{
 			Status: func() error {
 				return runStatus(nil, nil)

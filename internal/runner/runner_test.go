@@ -474,3 +474,193 @@ func loadOnlySession(t *testing.T) *history.Session {
 	}
 	return &sessions[0]
 }
+
+// --- interactive-mode / conversation history tests ---
+
+func TestWithInteractive_ConversationHistorySentToLLM(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Safety.ToolCalling = config.ToolCallingNever
+
+	client := &scriptedClient{
+		results: []*llm.ChatResult{
+			{Response: &llm.Response{
+				Type: "commands",
+				Commands: []llm.Command{
+					{Command: successCommand, Description: "first", Risk: "safe", Certainty: 95},
+				},
+				Explanation: "Showing CPU usage",
+			}},
+			{Response: &llm.Response{
+				Type:        "explanation",
+				Explanation: "The first column is PID, the second is CPU%.",
+			}},
+		},
+	}
+
+	r := New(cfg, client, testShellInfo(), WithInteractive())
+
+	if err := r.RunInstruction("show cpu usage"); err != nil {
+		t.Fatalf("first RunInstruction() error = %v", err)
+	}
+	if err := r.RunInstruction("explain the output"); err != nil {
+		t.Fatalf("second RunInstruction() error = %v", err)
+	}
+
+	// The second call must include the first user turn in the message string
+	// (scriptedClient.ChatMessages concatenates non-system messages).
+	if len(client.messages) != 2 {
+		t.Fatalf("LLM calls = %d, want 2", len(client.messages))
+	}
+	if !strings.Contains(client.messages[1], "show cpu usage") {
+		t.Fatalf("second LLM call missing first user turn:\n%s", client.messages[1])
+	}
+	if !strings.Contains(client.messages[1], "Showing CPU usage") {
+		t.Fatalf("second LLM call missing first assistant turn:\n%s", client.messages[1])
+	}
+}
+
+func TestWithInteractive_ExplainThisShortcut(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Safety.ToolCalling = config.ToolCallingNever
+
+	client := &scriptedClient{
+		results: []*llm.ChatResult{
+			{Response: &llm.Response{
+				Type: "commands",
+				Commands: []llm.Command{
+					{Command: successCommand, Description: "list", Risk: "safe", Certainty: 90},
+				},
+				Explanation: "Lists files in the current directory.",
+			}},
+		},
+	}
+
+	r := New(cfg, client, testShellInfo(), WithInteractive())
+
+	// First turn: normal instruction
+	if err := r.RunInstruction("list files"); err != nil {
+		t.Fatalf("RunInstruction() error = %v", err)
+	}
+	if len(client.messages) != 1 {
+		t.Fatalf("LLM calls after first turn = %d, want 1", len(client.messages))
+	}
+
+	// Second turn: "explain this" — should NOT call LLM again
+	stdout, _ := captureRunnerOutput(t, func() {
+		if err := r.RunInstruction("explain this"); err != nil {
+			t.Fatalf("explain this error = %v", err)
+		}
+	})
+	if len(client.messages) != 1 {
+		t.Fatalf("LLM calls after 'explain this' = %d, want 1 (no new call)", len(client.messages))
+	}
+	if !strings.Contains(stdout, "Lists files in the current directory.") {
+		t.Fatalf("explain this output missing explanation:\n%s", stdout)
+	}
+}
+
+func TestWithInteractive_ExplainThisWithNoHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Safety.ToolCalling = config.ToolCallingNever
+
+	// LLM returns an explanation for the fallthrough case
+	client := &scriptedClient{
+		results: []*llm.ChatResult{
+			{Response: &llm.Response{
+				Type:        "explanation",
+				Explanation: "There is nothing to explain yet.",
+			}},
+		},
+	}
+
+	r := New(cfg, client, testShellInfo(), WithInteractive())
+
+	// No prior history — "explain this" should fall through to LLM
+	if err := r.RunInstruction("explain this"); err != nil {
+		t.Fatalf("RunInstruction() error = %v", err)
+	}
+	if len(client.messages) != 1 {
+		t.Fatalf("LLM calls = %d, want 1 (fallthrough to LLM)", len(client.messages))
+	}
+}
+
+func TestRunInstruction_ExplanationResponseType(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Safety.ToolCalling = config.ToolCallingNever
+
+	client := &scriptedClient{
+		results: []*llm.ChatResult{
+			{Response: &llm.Response{
+				Type:        "explanation",
+				Explanation: "grep -l shows only file names.",
+			}},
+		},
+	}
+
+	r := New(cfg, client, testShellInfo())
+	stdout, _ := captureRunnerOutput(t, func() {
+		if err := r.RunInstruction("what flag does grep use to show only file names"); err != nil {
+			t.Fatalf("RunInstruction() error = %v", err)
+		}
+	})
+	if !strings.Contains(stdout, "grep -l shows only file names.") {
+		t.Fatalf("explanation not printed:\n%s", stdout)
+	}
+}
+
+func TestSingleShotMode_NoConversationHistory(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Safety.ToolCalling = config.ToolCallingNever
+
+	client := &scriptedClient{
+		results: []*llm.ChatResult{
+			{Response: &llm.Response{
+				Type: "commands",
+				Commands: []llm.Command{
+					{Command: successCommand, Description: "ok", Risk: "safe", Certainty: 99},
+				},
+			}},
+			{Response: &llm.Response{
+				Type: "commands",
+				Commands: []llm.Command{
+					{Command: successCommand, Description: "ok2", Risk: "safe", Certainty: 99},
+				},
+			}},
+		},
+	}
+
+	// Single-shot runner (no WithInteractive)
+	r := New(cfg, client, testShellInfo())
+
+	if err := r.RunInstruction("first"); err != nil {
+		t.Fatalf("first RunInstruction() error = %v", err)
+	}
+	if err := r.RunInstruction("second"); err != nil {
+		t.Fatalf("second RunInstruction() error = %v", err)
+	}
+
+	// In single-shot mode the second message should NOT contain the first turn
+	if strings.Contains(client.messages[1], "first") {
+		t.Fatalf("single-shot mode should not include prior turns in second call:\n%s", client.messages[1])
+	}
+}
