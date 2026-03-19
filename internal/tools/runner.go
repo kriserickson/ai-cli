@@ -43,6 +43,13 @@ func RunWithTools(client llm.Client, systemPrompt, userMessage string, cfg *conf
 	return runWithTools(client, systemPrompt, userMessage, cfg, shellInfo, maxIter, defaultConfirm)
 }
 
+// RunWithMessages is like RunWithTools but accepts a pre-built messages slice
+// (e.g., including prior conversation history for multi-turn interactive sessions).
+// If tool_calling is "never", it calls the LLM once with ChatMessages() (no tool loop).
+func RunWithMessages(client llm.Client, messages []llm.Message, cfg *config.Config, shellInfo shell.Info, maxIter int) (*llm.Response, error) {
+	return runWithMessages(client, messages, cfg, shellInfo, maxIter, defaultConfirm)
+}
+
 func runWithTools(client llm.Client, systemPrompt, userMessage string, cfg *config.Config, shellInfo shell.Info, maxIter int, confirm confirmFunc) (*llm.Response, error) {
 	// If tools are disabled, just do a simple chat call
 	if cfg.Safety.ToolCalling == config.ToolCallingNever {
@@ -52,6 +59,14 @@ func runWithTools(client llm.Client, systemPrompt, userMessage string, cfg *conf
 	messages := []llm.Message{
 		{Role: "system", Content: systemPrompt},
 		{Role: "user", Content: userMessage},
+	}
+	return runWithMessages(client, messages, cfg, shellInfo, maxIter, confirm)
+}
+
+func runWithMessages(client llm.Client, messages []llm.Message, cfg *config.Config, shellInfo shell.Info, maxIter int, confirm confirmFunc) (*llm.Response, error) {
+	// If tools are disabled, call the LLM once with the provided messages.
+	if cfg.Safety.ToolCalling == config.ToolCallingNever {
+		return client.ChatMessages(messages)
 	}
 
 	for range maxIter {

@@ -59,7 +59,7 @@ func parentShellProcess() string {
 		}
 		switch strings.ToLower(parent.name) {
 		case "cmd.exe":
-			return "cmd"
+			return shellCmd
 		case "powershell.exe":
 			return preferredPowerShell()
 		case "pwsh.exe":
@@ -70,7 +70,7 @@ func parentShellProcess() string {
 			if shell := os.Getenv("SHELL"); shell != "" && !strings.HasPrefix(shell, "/") {
 				return shell
 			}
-			return "bash"
+			return shellBash
 		}
 	}
 	return ""
