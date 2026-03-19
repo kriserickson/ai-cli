@@ -372,7 +372,7 @@ func TestExecPing_NoHost(t *testing.T) {
 	}
 }
 
-func TestShellOutHelpers_ErrorPaths(t *testing.T) {
+func TestShellOutHelpers_ErrorPaths(_ *testing.T) {
 	if runtime.GOOS == windowsOS {
 		// Exercise the error paths on Windows by calling the tools directly.
 		// These typically involve executing PowerShell commands.
@@ -384,7 +384,7 @@ func TestShellOutHelpers_ErrorPaths(t *testing.T) {
 	}
 }
 
-func TestShellOutHelpers_SuccessPaths(t *testing.T) {
+func TestShellOutHelpers_SuccessPaths(_ *testing.T) {
 	if runtime.GOOS == windowsOS {
 		// Already exercised in TestExecute_ProcessAndNetworkTools on Windows
 		return
