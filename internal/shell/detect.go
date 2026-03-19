@@ -13,6 +13,10 @@ const (
 	shellPwsh       = "pwsh"
 	shellWindows    = "windows"
 	shellUnknown    = "unknown"
+	shellBash       = "bash"
+	shellCmd        = "cmd"
+	shellZsh        = "zsh"
+	shellFish       = "fish"
 )
 
 var (
@@ -59,7 +63,7 @@ func detectWindowsShell() string {
 		if shell := os.Getenv("SHELL"); shell != "" && !strings.HasPrefix(shell, "/") {
 			return shell
 		}
-		return "bash"
+		return shellBash
 	}
 
 	// Walk the process tree to find the actual parent shell.
@@ -72,7 +76,7 @@ func detectWindowsShell() string {
 		return detectPreferredPowershell()
 	}
 
-	return "cmd"
+	return shellCmd
 }
 
 func detectShellVersion(shell string) string {
@@ -80,7 +84,7 @@ func detectShellVersion(shell string) string {
 	var cmd *exec.Cmd
 
 	switch base {
-	case "bash", "zsh", "fish":
+	case shellBash, shellZsh, shellFish:
 		cmd = exec.CommandContext(context.Background(), shell, "--version")
 	case shellPowershell, shellPwsh:
 		cmd = exec.CommandContext(context.Background(), shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
@@ -113,7 +117,7 @@ func Command(shell string) (bin string, args []string) {
 	switch base {
 	case shellPowershell, shellPwsh:
 		return shell, []string{"-Command"}
-	case "cmd":
+	case shellCmd:
 		return shell, []string{"/c"}
 	default:
 		return shell, []string{"-c"}

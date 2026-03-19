@@ -683,8 +683,9 @@ func TestHistoryListDefaultCountVerboseAndCountFlag(t *testing.T) {
 	for i := range 12 {
 		session := history.NewSession(fmt.Sprintf("prompt %02d", i), t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
 		session.Status = "completed"
-		session.UpdatedAt = time.Date(2026, 3, 2, 10, i, 0, 0, time.Local)
+		session.UpdatedAt = time.Date(2026, 3, 2, 10, i, 0, 0, time.UTC)
 		session.CreatedAt = session.UpdatedAt
+		session.ID = fmt.Sprintf("id-%02d", i)
 		session.Exchanges = []history.Exchange{
 			{
 				Attempt:     1,
