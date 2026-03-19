@@ -186,7 +186,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 		r.saveSession(session)
 
 		if r.shouldRetry(session, autoRetry) {
-			return r.retrySession(session, systemPrompt, depth, true)
+			return r.retrySession(session, systemPrompt, depth, autoRetry)
 		}
 
 		r.lastFailed = session

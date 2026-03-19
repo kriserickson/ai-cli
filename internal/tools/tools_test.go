@@ -239,4 +239,18 @@ func TestTruncateOutput(t *testing.T) {
 	if !strings.Contains(result, "[output truncated]") {
 		t.Error("truncated output should contain truncation notice")
 	}
+
+	// Mid-point newline logic
+	mid := strings.Repeat("a", maxOutputBytes/2+100) + "\n" + strings.Repeat("b", maxOutputBytes)
+	resMid := truncateOutput(mid)
+	if !strings.Contains(resMid, "\n... [output truncated]") {
+		t.Error("expected mid-point truncation notice with newline")
+	}
+
+	// No mid-point newline logic
+	nomid := strings.Repeat("a", maxOutputBytes+100)
+	resNoMid := truncateOutput(nomid)
+	if !strings.Contains(resNoMid, "\n... [output truncated]") && !strings.Contains(resNoMid, "... [output truncated]") {
+		t.Error("expected no mid-point truncation notice")
+	}
 }
