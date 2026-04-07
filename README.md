@@ -18,13 +18,6 @@ Always review and understand every command before you approve or run it. Treat g
 brew install kriserickson/tap/ai-cli
 ```
 
-#### Go
-
-Requires Go 1.25+.
-
-```sh
-go install github.com/kriserickson/ai-cli@latest
-```
 
 #### Binary releases
 
