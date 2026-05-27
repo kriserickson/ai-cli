@@ -2,6 +2,8 @@
 
 AI CLI translates natural language into shell commands using LLMs (OpenAI, OpenRouter, or a local server), then applies a safety policy before execution.
 
+![AI CLI banner](images/ai-cli-banner.png)
+
 ## Important Safety Warning
 
 LLMs are non-deterministic. The same prompt can produce different commands across runs.
