@@ -144,7 +144,7 @@ func showHistory(id string) error {
 					for _, command := range exchange.Response.Commands {
 						fmt.Printf("    command: %s\n", command.Command)
 					}
-				case "config":
+				case subCmdConfig:
 					fmt.Printf("    config: %s %s = %s\n", exchange.Response.Action, exchange.Response.Key, config.DisplayValue(exchange.Response.Action, exchange.Response.Key, exchange.Response.Value))
 				}
 			}

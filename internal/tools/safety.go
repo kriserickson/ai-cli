@@ -7,18 +7,24 @@ import (
 	"strings"
 )
 
+const (
+	patternDotEnv  = ".env"
+	patternIDRSA   = "id_rsa"
+	redactedValue  = "[REDACTED]"
+)
+
 // blockedPatterns lists file/directory patterns that must never be read or listed,
 // even within the current working directory.
 var blockedPatterns = []string{
 	".ssh/",
 	".gnupg/",
-	".env",
+	patternDotEnv,
 	".env.",
 	"*.pem",
 	"*.key",
 	"*.p12",
 	"*.pfx",
-	"id_rsa",
+	patternIDRSA,
 	"id_ed25519",
 	"credentials",
 	"secrets",
@@ -201,7 +207,7 @@ func FilterEnvironment(vars []string) []string {
 		valueShown := false
 		for _, sensitive := range sensitiveEnvKeys {
 			if strings.Contains(upperKey, sensitive) {
-				value = "[REDACTED]"
+				value = redactedValue
 				valueShown = true
 				break
 			}

@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+const (
+	boolStringTrue  = "true"
+	boolStringFalse = "false"
+)
+
 // ParseBool parses a string as a boolean, accepting "true" or "false"
 // (case-insensitive, trimmed). Any other value returns an error.
 //
@@ -15,9 +20,9 @@ import (
 // only "true"/"false" are documented as valid.
 func ParseBool(s string) (bool, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "true":
+	case boolStringTrue:
 		return true, nil
-	case "false":
+	case boolStringFalse:
 		return false, nil
 	default:
 		return false, fmt.Errorf("must be 'true' or 'false', got %q", s)

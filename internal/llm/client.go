@@ -16,6 +16,11 @@ import (
 	"github.com/kriserickson/ai-cli/internal/config"
 )
 
+const (
+	roleSystem = "system"
+	roleUser   = "user"
+)
+
 type Client interface {
 	Chat(systemPrompt, userMessage string) (*Response, error)
 	ChatMessages(messages []Message) (*Response, error)
@@ -219,8 +224,8 @@ func (c *openAIClient) ChatMessages(messages []Message) (*Response, error) {
 
 func (c *openAIClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
 	return c.chatWithMessages([]Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userMessage},
+		{Role: roleSystem, Content: systemPrompt},
+		{Role: roleUser, Content: userMessage},
 	})
 }
 
@@ -357,8 +362,8 @@ func (c *ollamaClient) ChatMessages(messages []Message) (*Response, error) {
 
 func (c *ollamaClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
 	return c.chatWithMessages([]Message{
-		{Role: "system", Content: systemPrompt},
-		{Role: "user", Content: userMessage},
+		{Role: roleSystem, Content: systemPrompt},
+		{Role: roleUser, Content: userMessage},
 	})
 }
 
@@ -366,7 +371,7 @@ func (c *ollamaClient) chatWithMessages(messages []Message) (*ChatResult, error)
 	var system, prompt string
 	for _, m := range messages {
 		switch m.Role {
-		case "system":
+		case roleSystem:
 			if system == "" {
 				system = m.Content
 			} else {

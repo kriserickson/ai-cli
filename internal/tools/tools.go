@@ -18,9 +18,22 @@ import (
 )
 
 const (
-	maxOutputBytes  = 4096
-	windowsOS       = "windows"
-	toolExecTimeout = 30 * time.Second
+	maxOutputBytes       = 4096
+	windowsOS            = "windows"
+	toolExecTimeout      = 30 * time.Second
+	toolListDirectory    = "list_directory"
+	toolReadFile         = "read_file"
+	toolCommandHelp      = "command_help"
+	toolListMemories     = "list_memories"
+	toolListProcesses    = "list_processes"
+	toolSystemResources  = "system_resources"
+	toolNetworkConnections = "network_connections"
+	toolPing             = "ping"
+	toolCheckCommand     = "check_command"
+	toolDiskUsage        = "disk_usage"
+	argPath              = "path"
+	argCommand           = "command"
+	argHost              = "host"
 )
 
 // ToolDef describes a tool the AI can request.
@@ -32,17 +45,17 @@ type ToolDef struct {
 
 // Registry is the list of available tools.
 var Registry = []ToolDef{
-	{Name: "list_directory", Description: "List files in a directory", Args: []string{"path"}},
-	{Name: "read_file", Description: "Read file contents (max 10KB, safety-checked)", Args: []string{"path"}},
-	{Name: "command_help", Description: "Get help/man page for a command", Args: []string{"command"}},
-	{Name: "list_memories", Description: "List stored AI CLI memories", Args: nil},
-	{Name: "list_processes", Description: "List running processes", Args: nil},
-	{Name: "system_resources", Description: "Show top processes by CPU/memory", Args: nil},
-	{Name: "network_connections", Description: "Show active network connections", Args: nil},
-	{Name: "ping", Description: "Check host connectivity (3 packets)", Args: []string{"host"}},
-	{Name: "check_command", Description: "Check if a command is installed", Args: []string{"command"}},
-	{Name: "disk_usage", Description: "Show disk space usage", Args: nil},
-	{Name: "environment", Description: "Show environment variable names and only a safe subset of values", Args: nil},
+	{Name: toolListDirectory, Description: "List files in a directory", Args: []string{argPath}},
+	{Name: toolReadFile, Description: "Read file contents (max 10KB, safety-checked)", Args: []string{argPath}},
+	{Name: toolCommandHelp, Description: "Get help/man page for a command", Args: []string{argCommand}},
+	{Name: toolListMemories, Description: "List stored AI CLI memories", Args: nil},
+	{Name: toolListProcesses, Description: "List running processes", Args: nil},
+	{Name: toolSystemResources, Description: "Show top processes by CPU/memory", Args: nil},
+	{Name: toolNetworkConnections, Description: "Show active network connections", Args: nil},
+	{Name: toolPing, Description: "Check host connectivity (3 packets)", Args: []string{argHost}},
+	{Name: toolCheckCommand, Description: "Check if a command is installed", Args: []string{argCommand}},
+	{Name: toolDiskUsage, Description: "Show disk space usage", Args: nil},
+	{Name: environmentToolName, Description: "Show environment variable names and only a safe subset of values", Args: nil},
 }
 
 // Execute runs the named tool with the given args and returns its output.
@@ -55,27 +68,27 @@ func Execute(toolName string, args map[string]string, _ shell.Info) (string, err
 	var output string
 
 	switch toolName {
-	case "list_directory":
-		output, err = execListDirectory(args["path"], cwd)
-	case "read_file":
-		output, err = execReadFile(args["path"], cwd)
-	case "command_help":
-		output, err = execCommandHelp(args["command"])
-	case "list_memories":
+	case toolListDirectory:
+		output, err = execListDirectory(args[argPath], cwd)
+	case toolReadFile:
+		output, err = execReadFile(args[argPath], cwd)
+	case toolCommandHelp:
+		output, err = execCommandHelp(args[argCommand])
+	case toolListMemories:
 		output, err = execListMemories()
-	case "list_processes":
+	case toolListProcesses:
 		output, err = execListProcesses()
-	case "system_resources":
+	case toolSystemResources:
 		output, err = execSystemResources()
-	case "network_connections":
+	case toolNetworkConnections:
 		output, err = execNetworkConnections()
-	case "ping":
-		output, err = execPing(args["host"])
-	case "check_command":
-		output, err = execCheckCommand(args["command"])
-	case "disk_usage":
+	case toolPing:
+		output, err = execPing(args[argHost])
+	case toolCheckCommand:
+		output, err = execCheckCommand(args[argCommand])
+	case toolDiskUsage:
 		output, err = execDiskUsage()
-	case "environment":
+	case environmentToolName:
 		output = execEnvironment()
 		// Do not truncate environment output; values are already hidden by
 		// default and callers may need to inspect the full variable list.

@@ -6,4 +6,4 @@ package shell
 func parentShellProcess() string { return "" }
 
 // preferredPowerShell is a no-op on non-Windows platforms.
-func preferredPowerShell() string { return "powershell" }
+func preferredPowerShell() string { return shellPowershell }

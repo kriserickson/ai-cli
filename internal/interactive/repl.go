@@ -24,6 +24,13 @@ var (
 	replNewReadline = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
 )
 
+const (
+	replCmdStatus   = "status"
+	replCmdDoctor   = "doctor"
+	replCmdSetModel = "set-model"
+	replCmdRetry    = "retry"
+)
+
 // BuiltinCommands holds handlers for built-in REPL commands so the interactive
 // package doesn't need to import the cmd package (which would be circular).
 type BuiltinCommands struct {
@@ -85,17 +92,17 @@ func Run(version string, cmds BuiltinCommands, instructionRunner runner.Interfac
 		case input == "version":
 			fmt.Printf("ai %s\n", version)
 
-		case input == "status":
+		case input == replCmdStatus:
 			if err := cmds.Status(); err != nil {
 				color.Red("Error: %v", err)
 			}
 
-		case input == "doctor":
+		case input == replCmdDoctor:
 			if err := cmds.Doctor(); err != nil {
 				color.Red("Error: %v", err)
 			}
 
-		case input == "set-model" || strings.HasPrefix(input, "set-model "):
+		case input == replCmdSetModel || strings.HasPrefix(input, replCmdSetModel+" "):
 			parts := strings.Fields(input)
 			if len(parts) > 2 {
 				color.Red("Error: usage: set-model [light|default|high]")
@@ -152,7 +159,7 @@ func Run(version string, cmds BuiltinCommands, instructionRunner runner.Interfac
 				color.Red("Error: %v", err)
 			}
 
-		case input == "retry" || strings.HasPrefix(input, "retry "):
+		case input == replCmdRetry || strings.HasPrefix(input, replCmdRetry+" "):
 			depth, err := runner.ParseRetryDepth(input)
 			if err != nil {
 				color.Red("Error: %v", err)
@@ -175,8 +182,8 @@ func printHelp() {
 	fmt.Println("Built-in commands:")
 	fmt.Printf("  %-30s %s\n", "help", "Show this help message")
 	fmt.Printf("  %-30s %s\n", "version", "Print the current version")
-	fmt.Printf("  %-30s %s\n", "status", "Show current configuration status")
-	fmt.Printf("  %-30s %s\n", "doctor", "Check and repair configuration")
+	fmt.Printf("  %-30s %s\n", replCmdStatus, "Show current configuration status")
+	fmt.Printf("  %-30s %s\n", replCmdDoctor, "Check and repair configuration")
 	fmt.Printf("  %-30s %s\n", "set-model [level]", "Configure the light, default, or high model")
 	fmt.Printf("  %-30s %s\n", "model-level [level]", "Show or switch the current model level")
 	fmt.Printf("  %-30s %s\n", "config show", "Show current configuration")

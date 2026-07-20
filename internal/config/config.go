@@ -27,6 +27,8 @@ const (
 	ToolCallingAlwaysPrompt    = "always_prompt"    // Prompt the user before every tool call
 	ToolCallingDangerousPrompt = "dangerous_prompt" // Only prompt when a tool hits a safety rule
 	ToolCallingAlwaysAllow     = "always_allow"     // Execute all tools without prompting
+
+	allowlistGit = "git"
 )
 
 type Config struct {
@@ -161,7 +163,7 @@ func DefaultConfig() *Config {
 			AlwaysConfirm:     false,
 			ToolCalling:       ToolCallingNever,
 			MinCertainty:      80,
-			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
+			AllowlistPrefixes: []string{allowlistGit, "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
 		},
 		History: HistoryConfig{
 			IncludeLLMOutput:  true,

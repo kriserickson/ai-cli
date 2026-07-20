@@ -18,6 +18,15 @@ const (
 	keyModelParameters = "model_parameters"
 	keyParametersLight = "parameters_light"
 	keyParametersHigh  = "parameters_high"
+	keyDebug                   = "debug"
+	keyHistoryIncludeDebug     = "history_include_debug"
+	keyHistoryAskOnError       = "history_ask_on_error"
+	keyHistoryAutoCheckOnError = "history_auto_check_on_error"
+	keyDebugLogPayloads        = "debug_log_payloads"
+	boolTrue                   = "true"
+	boolFalse                  = "false"
+	subCmdConfig               = "config"
+	keyDefault                 = "default"
 )
 
 // configKeys is the canonical list of settable/gettable config keys used for shell completion.
@@ -37,14 +46,14 @@ var configKeys = []string{
 	keyAlwaysConfirm,
 	"tool_calling",
 	"min_certainty",
-	"debug",
+	keyDebug,
 	"history_include_llm_output",
-	"history_include_debug",
-	"history_ask_on_error",
-	"history_auto_check_on_error",
+	keyHistoryIncludeDebug,
+	keyHistoryAskOnError,
+	keyHistoryAutoCheckOnError,
 	"history_retry_max_attempts",
 	"history_retry_context_depth",
-	"debug_log_payloads",
+	keyDebugLogPayloads,
 }
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
@@ -52,20 +61,20 @@ var configKeyValues = map[string][]string{
 	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"provider_light":              {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"provider_high":               {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	keyAlwaysConfirm:              {"true", "false"},
+	keyAlwaysConfirm:              {boolTrue, boolFalse},
 	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
-	"debug":                       {config.DebugNone, config.DebugScreen, config.DebugFile},
-	"history_include_llm_output":  {"true", "false"},
-	"history_include_debug":       {"true", "false"},
-	"history_ask_on_error":        {"true", "false"},
-	"history_auto_check_on_error": {"true", "false"},
-	"debug_log_payloads":          {"true", "false"},
-	"upgrade_model_on_fail":       {"true", "false"},
+	keyDebug:                      {config.DebugNone, config.DebugScreen, config.DebugFile},
+	"history_include_llm_output":  {boolTrue, boolFalse},
+	keyHistoryIncludeDebug:        {boolTrue, boolFalse},
+	keyHistoryAskOnError:          {boolTrue, boolFalse},
+	keyHistoryAutoCheckOnError:    {boolTrue, boolFalse},
+	keyDebugLogPayloads:           {boolTrue, boolFalse},
+	"upgrade_model_on_fail":       {boolTrue, boolFalse},
 }
 
 func init() {
 	configCmd := &cobra.Command{
-		Use:   "config",
+		Use:   subCmdConfig,
 		Short: "Manage AI CLI configuration",
 	}
 
@@ -156,7 +165,7 @@ func currentProviderDetail(cfg *config.Config) *config.ProviderDetail {
 
 func getConfigValue(cfg *config.Config, key string) (string, error) {
 	switch key {
-	case "provider", "default":
+	case "provider", keyDefault:
 		return cfg.Provider.Default, nil
 	case "model":
 		return cfg.Provider.Model, nil
@@ -188,21 +197,21 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return strconv.Itoa(cfg.Safety.MinCertainty), nil
 	case "allowlist":
 		return strings.Join(cfg.Safety.AllowlistPrefixes, ", "), nil
-	case "debug":
+	case keyDebug:
 		return cfg.Debug, nil
 	case "history_include_llm_output":
 		return strconv.FormatBool(cfg.History.IncludeLLMOutput), nil
-	case "history_include_debug":
+	case keyHistoryIncludeDebug:
 		return strconv.FormatBool(cfg.History.IncludeDebug), nil
-	case "history_ask_on_error":
+	case keyHistoryAskOnError:
 		return strconv.FormatBool(cfg.History.AskOnError), nil
-	case "history_auto_check_on_error":
+	case keyHistoryAutoCheckOnError:
 		return strconv.FormatBool(cfg.History.AutoCheckOnError), nil
 	case "history_retry_max_attempts":
 		return strconv.Itoa(cfg.History.RetryMaxAttempts), nil
 	case "history_retry_context_depth":
 		return strconv.Itoa(cfg.History.RetryContextDepth), nil
-	case "debug_log_payloads":
+	case keyDebugLogPayloads:
 		return strconv.FormatBool(cfg.DebugLogPayloads), nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
@@ -211,7 +220,7 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 
 func setConfigValue(cfg *config.Config, key, value string) error {
 	switch key {
-	case "provider", "default":
+	case "provider", keyDefault:
 		if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
 			return errors.New("provider must be 'openai', 'openrouter', or 'local'")
 		}
@@ -275,7 +284,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return errors.New("min_certainty must be between 0 and 100")
 		}
 		cfg.Safety.MinCertainty = n
-	case "debug":
+	case keyDebug:
 		if value != config.DebugNone && value != config.DebugScreen && value != config.DebugFile {
 			return fmt.Errorf("debug must be '%s', '%s', or '%s'", config.DebugNone, config.DebugScreen, config.DebugFile)
 		}
@@ -286,19 +295,19 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return fmt.Errorf("history_include_llm_output %w", err)
 		}
 		cfg.History.IncludeLLMOutput = b
-	case "history_include_debug":
+	case keyHistoryIncludeDebug:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("history_include_debug %w", err)
 		}
 		cfg.History.IncludeDebug = b
-	case "history_ask_on_error":
+	case keyHistoryAskOnError:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("history_ask_on_error %w", err)
 		}
 		cfg.History.AskOnError = b
-	case "history_auto_check_on_error":
+	case keyHistoryAutoCheckOnError:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("history_auto_check_on_error %w", err)
@@ -322,7 +331,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 			return errors.New("history_retry_context_depth must be greater than 0")
 		}
 		cfg.History.RetryContextDepth = n
-	case "debug_log_payloads":
+	case keyDebugLogPayloads:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("debug_log_payloads %w", err)

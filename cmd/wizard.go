@@ -12,6 +12,7 @@ import (
 )
 
 const providerLabelLocal = "Local"
+const providerLabelOpenAI = "OpenAI"
 
 var (
 	wizardAskOne            = survey.AskOne
@@ -38,7 +39,7 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider() (string, error) {
-	idx, err := selectFromList("Select a provider:", []string{"OpenAI", "OpenRouter", providerLabelLocal})
+	idx, err := selectFromList("Select a provider:", []string{providerLabelOpenAI, "OpenRouter", providerLabelLocal})
 	if err != nil {
 		return "", err
 	}
