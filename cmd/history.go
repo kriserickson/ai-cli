@@ -12,6 +12,8 @@ import (
 	"github.com/kriserickson/ai-cli/internal/history"
 )
 
+const responseCommands = "commands"
+
 var (
 	historyVerbose bool
 	historyCount   int
@@ -138,7 +140,7 @@ func showHistory(id string) error {
 			}
 			if exchange.Response != nil {
 				switch exchange.Response.Type {
-				case "commands":
+				case responseCommands:
 					for _, command := range exchange.Response.Commands {
 						fmt.Printf("    command: %s\n", command.Command)
 					}
@@ -244,7 +246,7 @@ func historyListExecution(session *history.Session) *history.CommandAttempt {
 func historyListExchange(session *history.Session) *history.Exchange {
 	for i := len(session.Exchanges) - 1; i >= 0; i-- {
 		exchange := &session.Exchanges[i]
-		if exchange.Response == nil || exchange.Response.Type != "commands" || len(exchange.Response.Commands) == 0 {
+		if exchange.Response == nil || exchange.Response.Type != responseCommands || len(exchange.Response.Commands) == 0 {
 			if exchange.Error == "" {
 				continue
 			}

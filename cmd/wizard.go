@@ -11,6 +11,8 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
+const providerLabelLocal = "Local"
+
 var (
 	wizardAskOne            = survey.AskOne
 	wizardFetchOpenAIModels = llm.FetchOpenAIModels
@@ -36,7 +38,7 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider() (string, error) {
-	idx, err := selectFromList("Select a provider:", []string{"OpenAI", "OpenRouter", "Local"})
+	idx, err := selectFromList("Select a provider:", []string{"OpenAI", "OpenRouter", providerLabelLocal})
 	if err != nil {
 		return "", err
 	}

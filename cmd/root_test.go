@@ -207,7 +207,7 @@ func TestRunRoot_InteractiveMode_MemoryRun(t *testing.T) {
 	}
 
 	// Test MemoryRun: add
-	if err := capturedCmds.MemoryRun([]string{"add", "docker", "use compose v2"}); err != nil {
+	if err := capturedCmds.MemoryRun([]string{commandAdd, "docker", "use compose v2"}); err != nil {
 		t.Fatalf("MemoryRun(add) error: %v", err)
 	}
 
@@ -217,7 +217,7 @@ func TestRunRoot_InteractiveMode_MemoryRun(t *testing.T) {
 	}
 
 	// Test MemoryRun: add missing args
-	if err := capturedCmds.MemoryRun([]string{"add"}); err == nil {
+	if err := capturedCmds.MemoryRun([]string{commandAdd}); err == nil {
 		t.Fatal("MemoryRun(add) error = nil, want error")
 	}
 

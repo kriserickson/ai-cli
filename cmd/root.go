@@ -19,7 +19,10 @@ import (
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
-const windows = "windows"
+const (
+	windows    = "windows"
+	commandAdd = "add"
+)
 
 var (
 	debugFlag        string
@@ -182,7 +185,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 				switch args[0] {
 				case "list":
 					return listMemories()
-				case "add":
+				case commandAdd:
 					if len(args) < 3 {
 						return errors.New("usage: memory add <keyword> <content...>")
 					}

@@ -99,7 +99,7 @@ func TestRedactedCopy(t *testing.T) {
 }
 
 func TestDisplayValue(t *testing.T) {
-	if got := DisplayValue("set_key", "llm_key", "sk-secret-1234"); got == "sk-secret-1234" {
+	if got := DisplayValue("set_key", keyLLMKey, "sk-secret-1234"); got == "sk-secret-1234" {
 		t.Fatal("DisplayValue should redact sensitive values")
 	}
 	if got := DisplayValue("set_model", "model", "gpt-4o"); got != "gpt-4o" {

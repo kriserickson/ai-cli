@@ -444,8 +444,8 @@ func TestPickModel_LocalProvider(t *testing.T) {
 
 	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
 		return []llm.ModelInfo{
-			{ID: "llama3:latest", Name: "llama3:latest", Company: "Local"},
-			{ID: "codellama:7b", Name: "codellama:7b", Company: "Local"},
+			{ID: "llama3:latest", Name: "llama3:latest", Company: providerLabelLocal},
+			{ID: "codellama:7b", Name: "codellama:7b", Company: providerLabelLocal},
 		}, nil
 	}
 	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
@@ -510,7 +510,7 @@ func TestPickModel_LocalSelectError(t *testing.T) {
 	t.Cleanup(func() { wizardFetchLocalModels = origFetchLocal })
 
 	wizardFetchLocalModels = func(_ string) ([]llm.ModelInfo, error) {
-		return []llm.ModelInfo{{ID: "llama3", Name: "llama3", Company: "Local"}}, nil
+		return []llm.ModelInfo{{ID: "llama3", Name: "llama3", Company: providerLabelLocal}}, nil
 	}
 	wizardAskOne = func(_ survey.Prompt, _ interface{}, _ ...survey.AskOpt) error {
 		return errors.New("user canceled")

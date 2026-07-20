@@ -14,6 +14,7 @@ import (
 )
 
 const (
+	keyAlwaysConfirm   = "always_confirm"
 	keyModelParameters = "model_parameters"
 	keyParametersLight = "parameters_light"
 	keyParametersHigh  = "parameters_high"
@@ -33,7 +34,7 @@ var configKeys = []string{
 	"upgrade_model_on_fail",
 	"llm_key",
 	"llm_url",
-	"always_confirm",
+	keyAlwaysConfirm,
 	"tool_calling",
 	"min_certainty",
 	"debug",
@@ -51,7 +52,7 @@ var configKeyValues = map[string][]string{
 	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"provider_light":              {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"provider_high":               {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	"always_confirm":              {"true", "false"},
+	keyAlwaysConfirm:              {"true", "false"},
 	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
 	"debug":                       {config.DebugNone, config.DebugScreen, config.DebugFile},
 	"history_include_llm_output":  {"true", "false"},
@@ -179,7 +180,7 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return maskKey(currentProviderDetail(cfg).APIKey), nil
 	case "llm_url":
 		return currentProviderDetail(cfg).BaseURL, nil
-	case "always_confirm":
+	case keyAlwaysConfirm:
 		return strconv.FormatBool(cfg.Safety.AlwaysConfirm), nil
 	case "tool_calling":
 		return cfg.Safety.ToolCalling, nil
@@ -254,7 +255,7 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		currentProviderDetail(cfg).APIKey = value
 	case "llm_url":
 		currentProviderDetail(cfg).BaseURL = value
-	case "always_confirm":
+	case keyAlwaysConfirm:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("always_confirm %w", err)

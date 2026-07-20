@@ -35,7 +35,7 @@ func RedactedCopy(cfg *Config) *Config {
 
 // DisplayValue masks sensitive config values before printing them to the user.
 func DisplayValue(action, key, value string) string {
-	if action == "set_key" || key == "llm_key" {
+	if action == "set_key" || key == keyLLMKey {
 		return RedactSecret(value)
 	}
 	return value
