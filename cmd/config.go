@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -12,10 +13,24 @@ import (
 	"github.com/kriserickson/ai-cli/internal/config"
 )
 
+const (
+	keyModelParameters = "model_parameters"
+	keyParametersLight = "parameters_light"
+	keyParametersHigh  = "parameters_high"
+)
+
 // configKeys is the canonical list of settable/gettable config keys used for shell completion.
 var configKeys = []string{
 	"provider",
 	"model",
+	"provider_light",
+	"model_light",
+	"provider_high",
+	"model_high",
+	keyModelParameters,
+	keyParametersLight,
+	keyParametersHigh,
+	"upgrade_model_on_fail",
 	"llm_key",
 	"llm_url",
 	"always_confirm",
@@ -34,6 +49,8 @@ var configKeys = []string{
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
 	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	"provider_light":              {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	"provider_high":               {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
 	"always_confirm":              {"true", "false"},
 	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
 	"debug":                       {config.DebugNone, config.DebugScreen, config.DebugFile},
@@ -42,6 +59,7 @@ var configKeyValues = map[string][]string{
 	"history_ask_on_error":        {"true", "false"},
 	"history_auto_check_on_error": {"true", "false"},
 	"debug_log_payloads":          {"true", "false"},
+	"upgrade_model_on_fail":       {"true", "false"},
 }
 
 func init() {
@@ -141,6 +159,22 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return cfg.Provider.Default, nil
 	case "model":
 		return cfg.Provider.Model, nil
+	case "provider_light":
+		return cfg.Provider.ProviderLight, nil
+	case "model_light":
+		return cfg.Provider.ModelLight, nil
+	case "provider_high":
+		return cfg.Provider.ProviderHigh, nil
+	case "model_high":
+		return cfg.Provider.ModelHigh, nil
+	case keyModelParameters:
+		return formatModelParameters(cfg.Provider.ModelParameters)
+	case keyParametersLight:
+		return formatModelParameters(cfg.Provider.ParametersLight)
+	case keyParametersHigh:
+		return formatModelParameters(cfg.Provider.ParametersHigh)
+	case "upgrade_model_on_fail":
+		return strconv.FormatBool(cfg.Provider.UpgradeModelOnFail), nil
 	case "llm_key":
 		return maskKey(currentProviderDetail(cfg).APIKey), nil
 	case "llm_url":
@@ -183,6 +217,39 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		cfg.Provider.Default = value
 	case "model":
 		cfg.Provider.Model = value
+	case "provider_light":
+		if err := validateProvider(value); err != nil {
+			return err
+		}
+		cfg.Provider.ProviderLight = value
+	case "model_light":
+		cfg.Provider.ModelLight = value
+	case "provider_high":
+		if err := validateProvider(value); err != nil {
+			return err
+		}
+		cfg.Provider.ProviderHigh = value
+	case "model_high":
+		cfg.Provider.ModelHigh = value
+	case keyModelParameters, keyParametersLight, keyParametersHigh:
+		parameters, err := config.ParseModelParameters(value)
+		if err != nil {
+			return fmt.Errorf("%s %w", key, err)
+		}
+		switch key {
+		case keyModelParameters:
+			cfg.Provider.ModelParameters = parameters
+		case keyParametersLight:
+			cfg.Provider.ParametersLight = parameters
+		case keyParametersHigh:
+			cfg.Provider.ParametersHigh = parameters
+		}
+	case "upgrade_model_on_fail":
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("upgrade_model_on_fail %w", err)
+		}
+		cfg.Provider.UpgradeModelOnFail = b
 	case "llm_key":
 		currentProviderDetail(cfg).APIKey = value
 	case "llm_url":
@@ -261,9 +328,27 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.DebugLogPayloads = b
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, history_include_llm_output, history_include_debug, history_ask_on_error, history_auto_check_on_error, history_retry_max_attempts, history_retry_context_depth, debug_log_payloads", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: %s", key, strings.Join(configKeys, ", "))
 	}
 	return nil
+}
+
+func validateProvider(value string) error {
+	if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
+		return errors.New("provider must be 'openai', 'openrouter', or 'local'")
+	}
+	return nil
+}
+
+func formatModelParameters(parameters map[string]any) (string, error) {
+	if len(parameters) == 0 {
+		return "{}", nil
+	}
+	data, err := json.Marshal(parameters)
+	if err != nil {
+		return "", fmt.Errorf("format model parameters: %w", err)
+	}
+	return string(data), nil
 }
 
 func maskKey(key string) string {

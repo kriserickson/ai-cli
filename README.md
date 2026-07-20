@@ -106,6 +106,10 @@ Single-shot examples:
 ai list files in current directory sorted by size
 ai find all files larger than 10MB
 ai show what process is using port 8080
+
+# Use a configured model tier for one command
+ai --light summarize these logs
+ai --high diagnose this difficult build failure
 ```
 
 Interactive mode:
@@ -120,6 +124,7 @@ Then type requests one by one:
 ai> what ports are listening
 ai> compress all log files in /var/log older than 7 days
 ai> show biggest folders in my home directory
+ai> model-level high
 ```
 
 ## How Command Execution Safety Works
@@ -277,6 +282,8 @@ ai> memory remove my-server
 ai status
 ai doctor
 ai set-model
+ai set-model light
+ai set-model high
 ai version
 ai config show
 ai config get provider
@@ -376,6 +383,14 @@ Available `ai config get/set` keys:
 |-----|-------------|---------|
 | `provider` | Active provider (`openai`, `openrouter`, or `local`) | `openrouter` |
 | `model` | Model identifier | `anthropic/claude-3.5-sonnet` |
+| `provider_light` | Provider for the light tier; blank inherits `provider` | (empty) |
+| `model_light` | Model identifier for `--light` | (empty) |
+| `provider_high` | Provider for the high tier; blank inherits `provider` | (empty) |
+| `model_high` | Model identifier for `--high` | (empty) |
+| `model_parameters` | Default-tier request parameters as a JSON object | `{}` |
+| `parameters_light` | Light-tier request parameters as a JSON object | `{}` |
+| `parameters_high` | High-tier request parameters as a JSON object | `{}` |
+| `upgrade_model_on_fail` | Retry a failed command with the next model tier | `false` |
 | `llm_key` | API key for the current provider | (empty) |
 | `llm_url` | Base URL for the current provider | (provider default) |
 | `always_confirm` | Always prompt before execution (`true`/`false`) | `false` |
@@ -395,6 +410,41 @@ Notes:
 - `llm_key` and `llm_url` read and write the key/URL for whichever provider is currently selected
 - `ai config get llm_key` returns a masked value
 - `allowlist_prefixes` exists in config but is currently edited directly in `config.toml`
+
+### Model tiers and parameters
+
+The existing `provider` and `model` settings are the default (medium) tier. Configure the optional tiers with the setup wizard:
+
+```sh
+ai set-model light
+ai set-model default
+ai set-model high
+```
+
+The wizard selects a provider and model, displays parameter guidance for OpenAI, Anthropic, Google, or local model families, and accepts a JSON object of model parameters. You can also set parameters directly:
+
+```sh
+ai config set parameters_light '{"temperature":0.2}'
+ai config set model_parameters '{"reasoning_effort":"medium"}'
+ai config set parameters_high '{"reasoning_effort":"high"}'
+```
+
+For OpenAI-compatible endpoints, parameters are merged into the Chat Completions request. For an Ollama-compatible local provider, they are sent in `options`. Model support varies: GPT-4-family models commonly use `temperature`; GPT-5-family reasoning models use `reasoning_effort`. The wizard also explains the normalized OpenRouter controls for current Claude and Gemini models.
+
+Choose a tier for a single-shot command or interactive session:
+
+```sh
+ai --light list files
+ai --high diagnose the failed deployment
+
+ai
+ai> model-level
+ai> model-level light
+ai> model-level default
+ai> model-level high
+```
+
+`--light` and `--high` are mutually exclusive. In interactive mode, `model-level` changes only the current session. If `upgrade_model_on_fail=true`, a retry after a command failure uses one higher tier (`light` to `default`, or `default` to `high`) and then restores the original tier. Automatic retries still require `history_auto_check_on_error=true`; prompted or manual retries also use the upgrade.
 
 ## Debugging
 

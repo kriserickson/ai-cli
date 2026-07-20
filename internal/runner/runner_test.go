@@ -22,6 +22,50 @@ type scriptedClient struct {
 	messages []string
 }
 
+type levelScriptedClient struct {
+	*scriptedClient
+	level      string
+	callLevels []string
+}
+
+func (c *levelScriptedClient) Chat(systemPrompt, userMessage string) (*llm.Response, error) {
+	result, err := c.ChatWithTrace(systemPrompt, userMessage)
+	if err != nil {
+		return nil, err
+	}
+	return result.Response, nil
+}
+
+func (c *levelScriptedClient) ChatMessages(messages []llm.Message) (*llm.Response, error) {
+	c.callLevels = append(c.callLevels, c.level)
+	return c.scriptedClient.ChatMessages(messages)
+}
+
+func (c *levelScriptedClient) ChatWithTrace(systemPrompt, userMessage string) (*llm.ChatResult, error) {
+	c.callLevels = append(c.callLevels, c.level)
+	return c.scriptedClient.ChatWithTrace(systemPrompt, userMessage)
+}
+
+func (c *levelScriptedClient) SetModelLevel(level string) error {
+	c.level = level
+	return nil
+}
+
+func (c *levelScriptedClient) ModelLevel() string { return c.level }
+
+func (c *levelScriptedClient) UpgradeModelLevel() (restore func(), upgraded bool, err error) {
+	if c.level == config.ModelLevelHigh {
+		return func() {}, false, nil
+	}
+	previous := c.level
+	if c.level == config.ModelLevelLight {
+		c.level = config.ModelLevelDefault
+	} else {
+		c.level = config.ModelLevelHigh
+	}
+	return func() { c.level = previous }, true, nil
+}
+
 func (c *scriptedClient) Chat(systemPrompt, userMessage string) (*llm.Response, error) {
 	result, err := c.ChatWithTrace(systemPrompt, userMessage)
 	if err != nil {
@@ -239,6 +283,37 @@ func TestRunInstructionAutoRetriesAndSavesHistory(t *testing.T) {
 	}
 	if session.Executions[0].ExitCode == 0 {
 		t.Fatal("first execution should record a failure")
+	}
+}
+
+func TestRunInstructionUpgradesModelOnCommandFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.UpgradeModelOnFail = true
+	cfg.Provider.ModelHigh = "high-model"
+	cfg.History.AutoCheckOnError = true
+	cfg.History.AskOnError = false
+	cfg.History.RetryMaxAttempts = 1
+	client := &levelScriptedClient{
+		level: config.ModelLevelDefault,
+		scriptedClient: &scriptedClient{results: []*llm.ChatResult{
+			{Response: &llm.Response{Type: "commands", Commands: []llm.Command{{Command: failureCommand(), Description: "fail", Risk: "safe", Certainty: 100}}}},
+			{Response: &llm.Response{Type: "commands", Commands: []llm.Command{{Command: successCommand, Description: "recover", Risk: "safe", Certainty: 100}}}},
+		}},
+	}
+
+	r := New(cfg, client, testShellInfo())
+	if err := r.RunInstruction("recover with a stronger model"); err != nil {
+		t.Fatalf("RunInstruction: %v", err)
+	}
+	if len(client.callLevels) != 2 || client.callLevels[0] != config.ModelLevelDefault || client.callLevels[1] != config.ModelLevelHigh {
+		t.Fatalf("call levels = %#v, want [default high]", client.callLevels)
+	}
+	if client.level != config.ModelLevelDefault {
+		t.Fatalf("model level after retry = %q, want default", client.level)
 	}
 }
 

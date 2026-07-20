@@ -22,6 +22,14 @@ type Client interface {
 	ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error)
 }
 
+// ModelLevelController is implemented by clients that can switch between the
+// configured light, default, and high model tiers at runtime.
+type ModelLevelController interface {
+	SetModelLevel(level string) error
+	ModelLevel() string
+	UpgradeModelLevel() (restore func(), upgraded bool, err error)
+}
+
 // DebugWriter returns an io.Writer based on the debug mode string.
 // "screen" -> stderr, "file" -> ~/.ai-cli/llm.log (append), anything else -> nil.
 func DebugWriter(mode string) (io.Writer, func(), error) {
@@ -49,9 +57,99 @@ func DebugWriter(mode string) (io.Writer, func(), error) {
 }
 
 func NewClient(cfg *config.Config, debugOut io.Writer, debugMode string) (Client, error) {
+	level := cfg.ModelLevel
+	if level == "" {
+		level = config.ModelLevelDefault
+	}
+	c := &tieredClient{cfg: cfg, debugOut: debugOut, debugMode: debugMode}
+	if err := c.SetModelLevel(level); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+type tieredClient struct {
+	cfg       *config.Config
+	debugOut  io.Writer
+	debugMode string
+	level     string
+	active    Client
+}
+
+func (c *tieredClient) Chat(systemPrompt, userMessage string) (*Response, error) {
+	return c.active.Chat(systemPrompt, userMessage)
+}
+
+func (c *tieredClient) ChatMessages(messages []Message) (*Response, error) {
+	return c.active.ChatMessages(messages)
+}
+
+func (c *tieredClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatResult, error) {
+	return c.active.ChatWithTrace(systemPrompt, userMessage)
+}
+
+func (c *tieredClient) ModelLevel() string { return c.level }
+
+func (c *tieredClient) SetModelLevel(level string) error {
+	if !config.ValidModelLevel(level) {
+		return fmt.Errorf("invalid model level %q: must be light, default, or high", level)
+	}
+	selection, err := c.cfg.Provider.Selection(level)
+	if err != nil {
+		return err
+	}
+	active, err := newProviderClient(c.cfg, selection, c.debugOut, c.debugMode)
+	if err != nil {
+		return err
+	}
+	c.active = active
+	c.level = level
+	c.cfg.ModelLevel = level
+	return nil
+}
+
+func (c *tieredClient) UpgradeModelLevel() (restore func(), upgraded bool, err error) {
+	// A configured high tier is the opt-in signal that the full upgrade chain
+	// (light -> default -> high) is usable.
+	if c.cfg.Provider.ModelHigh == "" || c.level == config.ModelLevelHigh {
+		return func() {}, false, nil
+	}
+	next := config.ModelLevelHigh
+	if c.level == config.ModelLevelLight {
+		next = config.ModelLevelDefault
+	}
+	previous := c.level
+	if err := c.SetModelLevel(next); err != nil {
+		return nil, false, err
+	}
+	return func() {
+		if err := c.SetModelLevel(previous); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to restore %s model level: %v\n", previous, err)
+		}
+	}, true, nil
+}
+
+// SetModelLevel switches a client when it supports model tiers.
+func SetModelLevel(client Client, level string) error {
+	controller, ok := client.(ModelLevelController)
+	if !ok {
+		return errors.New("LLM client does not support model levels")
+	}
+	return controller.SetModelLevel(level)
+}
+
+// CurrentModelLevel returns the client's active tier, or default for legacy clients.
+func CurrentModelLevel(client Client) string {
+	if controller, ok := client.(ModelLevelController); ok {
+		return controller.ModelLevel()
+	}
+	return config.ModelLevelDefault
+}
+
+func newProviderClient(cfg *config.Config, selection config.ModelSelection, debugOut io.Writer, debugMode string) (Client, error) {
 	var baseURL, apiKey string
 
-	switch cfg.Provider.Default {
+	switch selection.Provider {
 	case config.ProviderOpenAI:
 		baseURL = cfg.Provider.OpenAI.BaseURL
 		apiKey = cfg.Provider.OpenAI.APIKey
@@ -60,28 +158,30 @@ func NewClient(cfg *config.Config, debugOut io.Writer, debugMode string) (Client
 		apiKey = cfg.Provider.OpenRouter.APIKey
 	case config.ProviderLocal:
 		return &ollamaClient{
-			provider:        cfg.Provider.Default,
+			provider:        selection.Provider,
 			baseURL:         strings.TrimRight(cfg.Provider.Local.BaseURL, "/"),
 			apiKey:          cfg.Provider.Local.APIKey,
-			model:           cfg.Provider.Model,
+			model:           selection.Model,
+			parameters:      selection.Parameters,
 			debugOut:        debugOut,
 			debugMode:       debugMode,
 			debugLogPayload: cfg.DebugLogPayloads,
 			httpClient:      &http.Client{Timeout: 120 * time.Second},
 		}, nil
 	default:
-		return nil, fmt.Errorf("unknown provider: %s", cfg.Provider.Default)
+		return nil, fmt.Errorf("unknown provider: %s", selection.Provider)
 	}
 
 	if apiKey == "" {
-		return nil, fmt.Errorf("no API key configured for provider %q. Run: ai config set %s_key YOUR_KEY", cfg.Provider.Default, cfg.Provider.Default)
+		return nil, fmt.Errorf("no API key configured for provider %q. Run: ai config set provider %s && ai config set llm_key YOUR_KEY", selection.Provider, selection.Provider)
 	}
 
 	return &openAIClient{
-		provider:        cfg.Provider.Default,
+		provider:        selection.Provider,
 		baseURL:         strings.TrimRight(baseURL, "/"),
 		apiKey:          apiKey,
-		model:           cfg.Provider.Model,
+		model:           selection.Model,
+		parameters:      selection.Parameters,
 		debugOut:        debugOut,
 		debugMode:       debugMode,
 		debugLogPayload: cfg.DebugLogPayloads,
@@ -94,6 +194,7 @@ type openAIClient struct {
 	baseURL         string
 	apiKey          string
 	model           string
+	parameters      map[string]any
 	debugOut        io.Writer
 	debugMode       string
 	debugLogPayload bool
@@ -124,9 +225,12 @@ func (c *openAIClient) ChatWithTrace(systemPrompt, userMessage string) (*ChatRes
 }
 
 func (c *openAIClient) chatWithMessages(messages []Message) (*ChatResult, error) {
-	req := ChatRequest{
-		Model:    c.model,
-		Messages: messages,
+	req := map[string]any{"model": c.model, "messages": messages}
+	for key, value := range c.parameters {
+		if key == "model" || key == "messages" {
+			continue
+		}
+		req[key] = value
 	}
 
 	body, err := json.Marshal(req)
@@ -214,6 +318,7 @@ type ollamaClient struct {
 	baseURL         string
 	apiKey          string
 	model           string
+	parameters      map[string]any
 	debugOut        io.Writer
 	debugMode       string
 	debugLogPayload bool
@@ -221,10 +326,11 @@ type ollamaClient struct {
 }
 
 type ollamaRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	System string `json:"system,omitempty"`
-	Stream bool   `json:"stream"`
+	Model   string         `json:"model"`
+	Prompt  string         `json:"prompt"`
+	System  string         `json:"system,omitempty"`
+	Stream  bool           `json:"stream"`
+	Options map[string]any `json:"options,omitempty"`
 }
 
 type ollamaResponse struct {
@@ -275,10 +381,11 @@ func (c *ollamaClient) chatWithMessages(messages []Message) (*ChatResult, error)
 	}
 
 	req := ollamaRequest{
-		Model:  c.model,
-		Prompt: prompt,
-		System: system,
-		Stream: false,
+		Model:   c.model,
+		Prompt:  prompt,
+		System:  system,
+		Stream:  false,
+		Options: c.parameters,
 	}
 
 	body, err := json.Marshal(req)

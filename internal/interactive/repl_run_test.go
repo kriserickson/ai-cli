@@ -180,6 +180,8 @@ func TestRun_DispatchesBuiltinsRunnerAndRetry(t *testing.T) {
 			{line: "status"},
 			{line: "doctor"},
 			{line: "set-model"},
+			{line: "model-level"},
+			{line: "model-level high"},
 			{line: "config"},
 			{line: "config show"},
 			{line: "history"},
@@ -194,6 +196,7 @@ func TestRun_DispatchesBuiltinsRunnerAndRetry(t *testing.T) {
 	statusCalls := 0
 	doctorCalls := 0
 	setModelCalls := 0
+	var modelLevels []string
 	var configArgs [][]string
 	var historyArgs [][]string
 	var runInputs []string
@@ -202,7 +205,14 @@ func TestRun_DispatchesBuiltinsRunnerAndRetry(t *testing.T) {
 	cmds := BuiltinCommands{
 		Status:   func() error { statusCalls++; return nil },
 		Doctor:   func() error { doctorCalls++; return nil },
-		SetModel: func() error { setModelCalls++; return nil },
+		SetModel: func(string) error { setModelCalls++; return nil },
+		ModelLevel: func(level string) (string, error) {
+			modelLevels = append(modelLevels, level)
+			if level == "" {
+				return "default", nil
+			}
+			return level, nil
+		},
 		ConfigRun: func(args []string) error {
 			configArgs = append(configArgs, append([]string(nil), args...))
 			return nil
@@ -231,6 +241,9 @@ func TestRun_DispatchesBuiltinsRunnerAndRetry(t *testing.T) {
 	}
 	if statusCalls != 1 || doctorCalls != 1 || setModelCalls != 1 {
 		t.Fatalf("builtin calls = status:%d doctor:%d set-model:%d", statusCalls, doctorCalls, setModelCalls)
+	}
+	if !reflect.DeepEqual(modelLevels, []string{"", "high"}) {
+		t.Fatalf("model-level calls = %#v", modelLevels)
 	}
 	if !reflect.DeepEqual(runInputs, []string{"do something"}) {
 		t.Fatalf("RunInstruction inputs = %#v", runInputs)
@@ -278,9 +291,10 @@ func TestRun_ContinuesAfterErrors(t *testing.T) {
 	runCalls := 0
 	retryCalls := 0
 	cmds := BuiltinCommands{
-		Status:   func() error { return errors.New("status failed") },
-		Doctor:   func() error { return errors.New("doctor failed") },
-		SetModel: func() error { return errors.New("set-model failed") },
+		Status:     func() error { return errors.New("status failed") },
+		Doctor:     func() error { return errors.New("doctor failed") },
+		SetModel:   func(string) error { return errors.New("set-model failed") },
+		ModelLevel: func(string) (string, error) { return "", errors.New("model-level failed") },
 		ConfigRun: func([]string) error {
 			return errors.New("config failed")
 		},

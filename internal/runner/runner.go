@@ -64,6 +64,16 @@ func New(cfg *config.Config, client llm.Client, shellInfo shell.Info, opts ...Op
 	return r
 }
 
+// SetModelLevel changes the active model tier for subsequent requests.
+func (r *Runner) SetModelLevel(level string) error {
+	return llm.SetModelLevel(r.client, level)
+}
+
+// ModelLevel returns the active model tier.
+func (r *Runner) ModelLevel() string {
+	return llm.CurrentModelLevel(r.client)
+}
+
 func (r *Runner) RunInstruction(instruction string) error {
 	// "explain this" shortcut: replay the last AI explanation without an API call.
 	if r.lastResponse != nil && r.lastResponse.Explanation != "" {
@@ -224,6 +234,21 @@ func (r *Runner) retrySession(session *history.Session, systemPrompt string, dep
 		r.lastFailed = session
 		return fmt.Errorf("command failed after %d AI retries", session.RetryCount)
 	}
+
+	restoreLevel := func() {}
+	if r.cfg.Provider.UpgradeModelOnFail {
+		if controller, ok := r.client.(llm.ModelLevelController); ok {
+			restore, upgraded, err := controller.UpgradeModelLevel()
+			if err != nil {
+				return fmt.Errorf("upgrade model after command failure: %w", err)
+			}
+			if upgraded {
+				restoreLevel = restore
+				fmt.Fprintf(os.Stderr, "Command failed; retrying with %s model level.\n", controller.ModelLevel())
+			}
+		}
+	}
+	defer restoreLevel()
 
 	session.RetryCount++
 	message := history.BuildRetryMessage(session, depth)

@@ -125,6 +125,94 @@ func TestNewClient_UnknownProvider(t *testing.T) {
 	}
 }
 
+func TestTieredClientSwitchesModelsAndParameters(t *testing.T) {
+	var requests []map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Errorf("decode request: %v", err)
+		}
+		requests = append(requests, request)
+		_ = json.NewEncoder(w).Encode(ChatResponse{Choices: []Choice{{Message: Message{Content: `{"type":"explanation","explanation":"ok"}`}}}})
+	}))
+	defer server.Close()
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderOpenAI
+	cfg.Provider.OpenAI.APIKey = "test-key"
+	cfg.Provider.OpenAI.BaseURL = server.URL
+	cfg.Provider.Model = "gpt-default"
+	cfg.Provider.ModelParameters = map[string]any{"reasoning_effort": "medium"}
+	cfg.Provider.ModelLight = "gpt-light"
+	cfg.Provider.ParametersLight = map[string]any{"temperature": 0.2}
+	cfg.Provider.ModelHigh = "gpt-high"
+	cfg.Provider.ParametersHigh = map[string]any{"reasoning_effort": "high"}
+	cfg.ModelLevel = config.ModelLevelLight
+
+	client, err := NewClient(cfg, nil, "")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	if _, err := client.Chat("system", "light"); err != nil {
+		t.Fatalf("light Chat: %v", err)
+	}
+	if err := SetModelLevel(client, config.ModelLevelDefault); err != nil {
+		t.Fatalf("SetModelLevel(default): %v", err)
+	}
+	if _, err := client.Chat("system", "default"); err != nil {
+		t.Fatalf("default Chat: %v", err)
+	}
+
+	controller := client.(ModelLevelController)
+	restore, upgraded, err := controller.UpgradeModelLevel()
+	if err != nil || !upgraded {
+		t.Fatalf("UpgradeModelLevel = upgraded:%v err:%v", upgraded, err)
+	}
+	if _, err := client.Chat("system", "high"); err != nil {
+		t.Fatalf("high Chat: %v", err)
+	}
+	restore()
+	if got := CurrentModelLevel(client); got != config.ModelLevelDefault {
+		t.Fatalf("level after restore = %q", got)
+	}
+
+	if len(requests) != 3 {
+		t.Fatalf("request count = %d", len(requests))
+	}
+	wants := []struct {
+		model string
+		key   string
+		value any
+	}{
+		{"gpt-light", "temperature", 0.2},
+		{"gpt-default", "reasoning_effort", "medium"},
+		{"gpt-high", "reasoning_effort", "high"},
+	}
+	for i, want := range wants {
+		if requests[i]["model"] != want.model || requests[i][want.key] != want.value {
+			t.Errorf("request %d = %#v, want model=%s %s=%v", i, requests[i], want.model, want.key, want.value)
+		}
+	}
+}
+
+func TestModelParameterHelpMajorFamilies(t *testing.T) {
+	tests := []struct {
+		provider string
+		model    string
+		want     string
+	}{
+		{config.ProviderOpenAI, "gpt-5.4", "reasoning_effort"},
+		{config.ProviderOpenAI, "gpt-4o", "temperature"},
+		{config.ProviderOpenRouter, "anthropic/claude-sonnet-4.6", "reasoning_effort"},
+		{config.ProviderOpenRouter, "google/gemini-3-pro", "model defaults"},
+	}
+	for _, tt := range tests {
+		if got := ModelParameterHelp(tt.provider, tt.model); !strings.Contains(got, tt.want) {
+			t.Errorf("ModelParameterHelp(%q) = %q, want %q", tt.model, got, tt.want)
+		}
+	}
+}
+
 func TestChat_Success(t *testing.T) {
 	llmResponse := Response{
 		Type: "commands",

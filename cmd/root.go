@@ -26,6 +26,8 @@ var (
 	retryOnErrorFlag bool
 	retryDepthFlag   int
 	explainFlag      bool
+	lightFlag        bool
+	highFlag         bool
 )
 
 // interactiveRun is the entry point for interactive mode, stubbable for testing.
@@ -49,6 +51,8 @@ func init() {
 	// When --debug is given without a value, default to config.DebugScreen
 	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Show detailed explanation of each command")
+	rootCmd.Flags().BoolVar(&lightFlag, "light", false, "Use the configured light model for this session")
+	rootCmd.Flags().BoolVar(&highFlag, "high", false, "Use the configured high model for this session")
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -67,6 +71,17 @@ func runRoot(_ *cobra.Command, args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load config: %w", err)
+	}
+	if lightFlag && highFlag {
+		return errors.New("--light and --high cannot be used together")
+	}
+	switch {
+	case lightFlag:
+		cfg.ModelLevel = config.ModelLevelLight
+	case highFlag:
+		cfg.ModelLevel = config.ModelLevelHigh
+	default:
+		cfg.ModelLevel = config.ModelLevelDefault
 	}
 
 	// --debug flag overrides config; if not set, use config value
@@ -103,8 +118,22 @@ func runRoot(_ *cobra.Command, args []string) error {
 			Doctor: func() error {
 				return runDoctor(nil, nil)
 			},
-			SetModel: func() error {
-				return runSetModel(nil, nil)
+			SetModel: func(level string) error {
+				if err := RunModelWizardForLevel(cfg, level); err != nil {
+					return err
+				}
+				if instructionRunner.ModelLevel() == level {
+					return instructionRunner.SetModelLevel(level)
+				}
+				return nil
+			},
+			ModelLevel: func(level string) (string, error) {
+				if level != "" {
+					if err := instructionRunner.SetModelLevel(level); err != nil {
+						return "", err
+					}
+				}
+				return instructionRunner.ModelLevel(), nil
 			},
 			ConfigRun: func(args []string) error {
 				if len(args) == 0 {
