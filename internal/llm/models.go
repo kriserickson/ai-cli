@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const companyOpenAI = "OpenAI"
+
 type ModelInfo struct {
 	ID      string
 	Name    string
@@ -116,7 +118,7 @@ func FetchOpenAIModels(baseURL, apiKey string) ([]ModelInfo, error) {
 
 	models := make([]ModelInfo, 0, len(gptModels))
 	for _, m := range gptModels {
-		models = append(models, ModelInfo{ID: m.ID, Name: m.ID, Company: "OpenAI"})
+		models = append(models, ModelInfo{ID: m.ID, Name: m.ID, Company: companyOpenAI})
 	}
 	return models, nil
 }

@@ -106,7 +106,7 @@ func TestGetConfigValue(t *testing.T) {
 		{"provider", "openrouter"},
 		{"default", "openrouter"},
 		{"model", "anthropic/claude-3.5-sonnet"},
-		{"always_confirm", "false"},
+		{keyAlwaysConfirm, "false"},
 		{"min_certainty", "80"},
 		{"allowlist", "git, ls, cat, echo, pwd, head, tail, wc, grep, find, which, man"},
 		{"debug", "none"},
@@ -229,9 +229,9 @@ func TestSetConfigValue(t *testing.T) {
 		{"provider", "openai", func(c *config.Config) bool { return c.Provider.Default == "openai" }},
 		{"default", "openai", func(c *config.Config) bool { return c.Provider.Default == "openai" }},
 		{"model", "gpt-4o", func(c *config.Config) bool { return c.Provider.Model == "gpt-4o" }},
-		{"always_confirm", "true", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
-		{"always_confirm", "false", func(c *config.Config) bool { return !c.Safety.AlwaysConfirm }},
-		{"always_confirm", "TRUE", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
+		{keyAlwaysConfirm, "true", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
+		{keyAlwaysConfirm, "false", func(c *config.Config) bool { return !c.Safety.AlwaysConfirm }},
+		{keyAlwaysConfirm, "TRUE", func(c *config.Config) bool { return c.Safety.AlwaysConfirm }},
 		{"min_certainty", "95", func(c *config.Config) bool { return c.Safety.MinCertainty == 95 }},
 		{"min_certainty", "0", func(c *config.Config) bool { return c.Safety.MinCertainty == 0 }},
 		{"min_certainty", "100", func(c *config.Config) bool { return c.Safety.MinCertainty == 100 }},
@@ -270,7 +270,7 @@ func TestSetConfigValue_Validation(t *testing.T) {
 		{"min_certainty", "notnum"}, // not a number
 		{"min_certainty", "-1"},     // out of range
 		{"min_certainty", "101"},    // out of range
-		{"always_confirm", "1"},     // invalid bool-like value
+		{keyAlwaysConfirm, "1"},     // invalid bool-like value
 		{"history_retry_max_attempts", "-1"},
 		{"history_retry_context_depth", "0"},
 		{"unknown_key", "value"}, // unknown key
@@ -561,11 +561,11 @@ func TestConfigSet_InvalidDebugValue(t *testing.T) {
 func TestConfigSet_AlwaysConfirm(t *testing.T) {
 	tempHome(t)
 
-	if _, err := runCmd(t, "config", "set", "always_confirm", "true"); err != nil {
+	if _, err := runCmd(t, "config", "set", keyAlwaysConfirm, "true"); err != nil {
 		t.Fatalf("config set always_confirm: %v", err)
 	}
 
-	out, err := runCmd(t, "config", "get", "always_confirm")
+	out, err := runCmd(t, "config", "get", keyAlwaysConfirm)
 	if err != nil {
 		t.Fatalf("config get always_confirm: %v", err)
 	}
@@ -614,7 +614,7 @@ func TestHistoryListAndShow(t *testing.T) {
 	session.Status = "completed"
 	session.RecordExchange("initial", 1, "system", session.Instruction, &llm.ChatResult{
 		Response: &llm.Response{
-			Type: "commands",
+			Type: responseCommands,
 			Commands: []llm.Command{
 				{Command: "scp kris@example:backup.sql.gz ."},
 			},
@@ -637,7 +637,7 @@ func TestHistoryListAndShow(t *testing.T) {
 	fallback := history.NewSession("second command", t.TempDir(), cfg, shell.Info{OS: "darwin/arm64", Shell: "/bin/zsh", Version: "zsh"})
 	fallback.RecordExchange("initial", 1, "system", fallback.Instruction, &llm.ChatResult{
 		Response: &llm.Response{
-			Type: "commands",
+			Type: responseCommands,
 			Commands: []llm.Command{
 				{Command: "echo second"},
 			},
@@ -692,7 +692,7 @@ func TestHistoryListDefaultCountVerboseAndCountFlag(t *testing.T) {
 				Kind:        "initial",
 				UserMessage: session.Instruction,
 				Response: &llm.Response{
-					Type:        "commands",
+					Type:        responseCommands,
 					Explanation: fmt.Sprintf("explanation %02d", i),
 					Commands: []llm.Command{
 						{Command: fmt.Sprintf("echo generated-%02d", i)},
@@ -807,7 +807,7 @@ func TestHistoryVerboseDoesNotTruncateExplanation(t *testing.T) {
 			Kind:        "retry",
 			UserMessage: "prompt",
 			Response: &llm.Response{
-				Type:        "commands",
+				Type:        responseCommands,
 				Explanation: explanation,
 				Commands: []llm.Command{
 					{Command: "echo ok"},
@@ -919,7 +919,7 @@ func TestMemoryAddListRemove(t *testing.T) {
 	tempHome(t)
 
 	// Add a memory
-	if _, err := runCmd(t, "memory", "add", "docker", "always use docker compose v2"); err != nil {
+	if _, err := runCmd(t, "memory", commandAdd, "docker", "always use docker compose v2"); err != nil {
 		t.Fatalf("memory add: %v", err)
 	}
 

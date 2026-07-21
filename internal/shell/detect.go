@@ -17,6 +17,9 @@ const (
 	shellCmd        = "cmd"
 	shellZsh        = "zsh"
 	shellFish       = "fish"
+	shellBinSh      = "/bin/sh"
+	shellFlagC      = "-c"
+	shellFlagCmd    = "-Command"
 )
 
 var (
@@ -51,7 +54,7 @@ func detectUnixShell() string {
 	if shell != "" {
 		return shell
 	}
-	return "/bin/sh"
+	return shellBinSh
 }
 
 func detectWindowsShell() string {
@@ -87,7 +90,7 @@ func detectShellVersion(shell string) string {
 	case shellBash, shellZsh, shellFish:
 		cmd = exec.CommandContext(context.Background(), shell, "--version")
 	case shellPowershell, shellPwsh:
-		cmd = exec.CommandContext(context.Background(), shell, "-Command", "$PSVersionTable.PSVersion.ToString()")
+		cmd = exec.CommandContext(context.Background(), shell, shellFlagCmd, "$PSVersionTable.PSVersion.ToString()")
 	default:
 		return shellUnknown
 	}
@@ -116,10 +119,10 @@ func Command(shell string) (bin string, args []string) {
 	base := shellBaseName(shell)
 	switch base {
 	case shellPowershell, shellPwsh:
-		return shell, []string{"-Command"}
+		return shell, []string{shellFlagCmd}
 	case shellCmd:
 		return shell, []string{"/c"}
 	default:
-		return shell, []string{"-c"}
+		return shell, []string{shellFlagC}
 	}
 }

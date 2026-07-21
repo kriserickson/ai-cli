@@ -99,7 +99,7 @@ func TestRedactedCopy(t *testing.T) {
 }
 
 func TestDisplayValue(t *testing.T) {
-	if got := DisplayValue("set_key", "llm_key", "sk-secret-1234"); got == "sk-secret-1234" {
+	if got := DisplayValue("set_key", keyLLMKey, "sk-secret-1234"); got == "sk-secret-1234" {
 		t.Fatal("DisplayValue should redact sensitive values")
 	}
 	if got := DisplayValue("set_model", "model", "gpt-4o"); got != "gpt-4o" {
@@ -495,6 +495,85 @@ func TestParseBool(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("ParseBool(%q) = %v, want %v", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestProviderSelection(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.Provider.ProviderLight = ProviderOpenAI
+	cfg.Provider.ModelLight = "gpt-4o-mini"
+	cfg.Provider.ParametersLight = map[string]any{"temperature": 0.2}
+	cfg.Provider.ModelHigh = "anthropic/claude-opus-4.6"
+
+	light, err := cfg.Provider.Selection(ModelLevelLight)
+	if err != nil {
+		t.Fatalf("Selection(light): %v", err)
+	}
+	if light.Provider != ProviderOpenAI || light.Model != "gpt-4o-mini" {
+		t.Fatalf("light selection = %#v", light)
+	}
+	if light.Parameters["temperature"] != 0.2 {
+		t.Fatalf("light parameters = %#v", light.Parameters)
+	}
+
+	high, err := cfg.Provider.Selection(ModelLevelHigh)
+	if err != nil {
+		t.Fatalf("Selection(high): %v", err)
+	}
+	if high.Provider != cfg.Provider.Default {
+		t.Fatalf("blank high provider should inherit %q, got %q", cfg.Provider.Default, high.Provider)
+	}
+}
+
+func TestProviderSelectionMissingTier(t *testing.T) {
+	cfg := DefaultConfig()
+	if _, err := cfg.Provider.Selection(ModelLevelLight); err == nil {
+		t.Fatal("Selection(light) error = nil, want missing model error")
+	}
+	if _, err := cfg.Provider.Selection("turbo"); err == nil {
+		t.Fatal("Selection(turbo) error = nil, want invalid level error")
+	}
+}
+
+func TestParseModelParameters(t *testing.T) {
+	parameters, err := ParseModelParameters(`{"temperature":0.2,"reasoning_effort":"high"}`)
+	if err != nil {
+		t.Fatalf("ParseModelParameters: %v", err)
+	}
+	if parameters["temperature"] != 0.2 || parameters["reasoning_effort"] != "high" {
+		t.Fatalf("parameters = %#v", parameters)
+	}
+	for _, input := range []string{"[]", `{"model":"override"}`, "not-json"} {
+		if _, err := ParseModelParameters(input); err == nil {
+			t.Errorf("ParseModelParameters(%q) error = nil", input)
+		}
+	}
+}
+
+func TestSaveLoadModelTiersAndParameters(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("USERPROFILE", tmpDir)
+	cfg := DefaultConfig()
+	cfg.Provider.ProviderLight = ProviderOpenAI
+	cfg.Provider.ModelLight = "gpt-4o-mini"
+	cfg.Provider.ParametersLight = map[string]any{"temperature": 0.1}
+	cfg.Provider.ProviderHigh = ProviderOpenRouter
+	cfg.Provider.ModelHigh = "anthropic/claude-opus-4.6"
+	cfg.Provider.ParametersHigh = map[string]any{"reasoning_effort": "high"}
+	cfg.Provider.UpgradeModelOnFail = true
+	if err := Save(cfg); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if loaded.Provider.ModelLight != cfg.Provider.ModelLight || loaded.Provider.ModelHigh != cfg.Provider.ModelHigh {
+		t.Fatalf("loaded tiers = %#v", loaded.Provider)
+	}
+	if !loaded.Provider.UpgradeModelOnFail || loaded.Provider.ParametersHigh["reasoning_effort"] != "high" {
+		t.Fatalf("loaded tier settings = %#v", loaded.Provider)
 	}
 }
 

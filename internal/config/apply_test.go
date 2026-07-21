@@ -70,7 +70,7 @@ func TestApplyAction_SetKey(t *testing.T) {
 	}{
 		{
 			name:  "llm_key sets current provider (openrouter)",
-			key:   "llm_key",
+			key:   keyLLMKey,
 			value: "sk-test-llm",
 			check: func(c *Config) string {
 				if c.Provider.OpenRouter.APIKey != "sk-test-llm" {
@@ -81,7 +81,7 @@ func TestApplyAction_SetKey(t *testing.T) {
 		},
 		{
 			name:     "llm_key sets openai when provider is openai",
-			key:      "llm_key",
+			key:      keyLLMKey,
 			value:    "sk-test-openai",
 			provider: ProviderOpenAI,
 			check: func(c *Config) string {
@@ -93,7 +93,7 @@ func TestApplyAction_SetKey(t *testing.T) {
 		},
 		{
 			name:     "llm_key sets local when provider is local",
-			key:      "llm_key",
+			key:      keyLLMKey,
 			value:    "sk-test-local",
 			provider: ProviderLocal,
 			check: func(c *Config) string {
@@ -260,14 +260,14 @@ func TestApplyAction_SetHistory(t *testing.T) {
 		check   func(*Config) bool
 		wantErr bool
 	}{
-		{name: "include_llm_output", key: "include_llm_output", value: "false", check: func(c *Config) bool { return !c.History.IncludeLLMOutput }},
-		{name: "include_debug", key: "include_debug", value: "true", check: func(c *Config) bool { return c.History.IncludeDebug }},
-		{name: "ask_on_error", key: "ask_on_error", value: "false", check: func(c *Config) bool { return !c.History.AskOnError }},
-		{name: "auto_check_on_error", key: "auto_check_on_error", value: "true", check: func(c *Config) bool { return c.History.AutoCheckOnError }},
-		{name: "retry_max_attempts", key: "retry_max_attempts", value: "3", check: func(c *Config) bool { return c.History.RetryMaxAttempts == 3 }},
+		{name: "include_llm_output", key: keyIncludeLLMOutput, value: "false", check: func(c *Config) bool { return !c.History.IncludeLLMOutput }},
+		{name: "include_debug", key: keyIncludeDebug, value: "true", check: func(c *Config) bool { return c.History.IncludeDebug }},
+		{name: "ask_on_error", key: keyAskOnError, value: "false", check: func(c *Config) bool { return !c.History.AskOnError }},
+		{name: "auto_check_on_error", key: keyAutoCheckOnError, value: "true", check: func(c *Config) bool { return c.History.AutoCheckOnError }},
+		{name: "retry_max_attempts", key: keyRetryMaxAttempts, value: "3", check: func(c *Config) bool { return c.History.RetryMaxAttempts == 3 }},
 		{name: "retry_context_depth", key: "retry_context_depth", value: "6", check: func(c *Config) bool { return c.History.RetryContextDepth == 6 }},
-		{name: "invalid bool", key: "include_llm_output", value: "1", wantErr: true},
-		{name: "invalid max", key: "retry_max_attempts", value: "-1", wantErr: true},
+		{name: "invalid bool", key: keyIncludeLLMOutput, value: "1", wantErr: true},
+		{name: "invalid max", key: keyRetryMaxAttempts, value: "-1", wantErr: true},
 		{name: "invalid depth", key: "retry_context_depth", value: "0", wantErr: true},
 		{name: "unknown key", key: "bogus", value: "true", wantErr: true},
 	}

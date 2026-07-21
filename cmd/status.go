@@ -53,6 +53,21 @@ func runStatus(_ *cobra.Command, _ []string) error {
 
 	fmt.Printf("Provider: %s\n", cfg.Provider.Default)
 	fmt.Printf("Model:    %s\n", cfg.Provider.Model)
+	if cfg.Provider.ModelLight != "" {
+		provider := cfg.Provider.ProviderLight
+		if provider == "" {
+			provider = cfg.Provider.Default
+		}
+		fmt.Printf("Light:    %s / %s\n", provider, cfg.Provider.ModelLight)
+	}
+	if cfg.Provider.ModelHigh != "" {
+		provider := cfg.Provider.ProviderHigh
+		if provider == "" {
+			provider = cfg.Provider.Default
+		}
+		fmt.Printf("High:     %s / %s\n", provider, cfg.Provider.ModelHigh)
+	}
+	fmt.Printf("Upgrade:  %t\n", cfg.Provider.UpgradeModelOnFail)
 	fmt.Printf("Debug:    %s\n", cfg.Debug)
 	if cfg.Debug == config.DebugFile {
 		if cfg.DebugLogPayloads {

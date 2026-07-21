@@ -21,7 +21,7 @@ func ShouldConfirm(cmd llm.Command, cfg *config.Config) bool {
 		return true
 	}
 
-	if cmd.Risk == "risky" {
+	if cmd.Risk == riskRisky {
 		return true
 	}
 

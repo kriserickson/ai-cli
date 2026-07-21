@@ -364,6 +364,8 @@ func TestRunModelWizard(t *testing.T) {
 				*(response.(*int)) = 0 // OpenAI
 			case 1: // model
 				*(response.(*int)) = 0
+			case 2: // parameters
+				*(response.(*string)) = ""
 			default:
 				t.Fatalf("unexpected extra prompt call %d", call)
 			}
@@ -519,6 +521,8 @@ func TestRunModelWizard(t *testing.T) {
 				*(response.(*string)) = "http://remotehost:11434/api/generate"
 			case 2: // model
 				*(response.(*int)) = 0
+			case 3: // parameters
+				*(response.(*string)) = ""
 			default:
 				t.Fatalf("unexpected prompt call %d", call)
 			}
@@ -586,6 +590,8 @@ func TestRunModelWizard(t *testing.T) {
 				*(response.(*int)) = 0 // OpenAI
 			case 1:
 				*(response.(*int)) = 0 // model
+			case 2:
+				*(response.(*string)) = "" // parameters
 			default:
 				t.Fatalf("unexpected prompt call %d", call)
 			}
@@ -609,4 +615,41 @@ func TestRunModelWizard(t *testing.T) {
 			t.Fatalf("RunModelWizard() error = %q, want save error", err.Error())
 		}
 	})
+}
+
+func TestRunModelWizardForLevelHighWithParameters(t *testing.T) {
+	stubWizardHooks(t)
+	call := 0
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		switch call {
+		case 0:
+			*(response.(*int)) = 0 // OpenAI provider
+		case 1:
+			*(response.(*int)) = 0 // first model
+		case 2:
+			*(response.(*string)) = `{"reasoning_effort":"high"}`
+		default:
+			t.Fatalf("unexpected prompt %d", call)
+		}
+		call++
+		return nil
+	}
+	wizardFetchOpenAIModels = func(_, _ string) ([]llm.ModelInfo, error) {
+		return []llm.ModelInfo{{ID: "gpt-5.4", Name: "gpt-5.4", Company: "OpenAI"}}, nil
+	}
+	wizardSaveConfig = func(cfg *config.Config) error {
+		if cfg.Provider.ProviderHigh != config.ProviderOpenAI || cfg.Provider.ModelHigh != "gpt-5.4" {
+			t.Fatalf("high selection = %#v", cfg.Provider)
+		}
+		if cfg.Provider.ParametersHigh["reasoning_effort"] != "high" {
+			t.Fatalf("high parameters = %#v", cfg.Provider.ParametersHigh)
+		}
+		return nil
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.OpenAI.APIKey = "sk-existing"
+	if err := RunModelWizardForLevel(cfg, config.ModelLevelHigh); err != nil {
+		t.Fatalf("RunModelWizardForLevel: %v", err)
+	}
 }

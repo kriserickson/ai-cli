@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -8,6 +9,11 @@ import (
 
 	"github.com/kriserickson/ai-cli/internal/config"
 	"github.com/kriserickson/ai-cli/internal/llm"
+)
+
+const (
+	providerLabelLocal  = "Local"
+	providerLabelOpenAI = "OpenAI"
 )
 
 var (
@@ -35,7 +41,7 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider() (string, error) {
-	idx, err := selectFromList("Select a provider:", []string{"OpenAI", "OpenRouter", "Local"})
+	idx, err := selectFromList("Select a provider:", []string{providerLabelOpenAI, "OpenRouter", providerLabelLocal})
 	if err != nil {
 		return "", err
 	}
@@ -70,6 +76,27 @@ func promptLocalBaseURL(current string) (string, error) {
 		return "", err
 	}
 	return url, nil
+}
+
+func promptModelParameters(provider, model string, current map[string]any) (map[string]any, error) {
+	fmt.Printf("Parameter help: %s\n", llm.ModelParameterHelp(provider, model))
+	defaultValue := ""
+	if len(current) > 0 {
+		data, err := json.Marshal(current)
+		if err != nil {
+			return nil, fmt.Errorf("format current model parameters: %w", err)
+		}
+		defaultValue = string(data)
+	}
+	var value string
+	err := wizardAskOne(&survey.Input{
+		Message: "Model parameters as JSON (blank for provider defaults):",
+		Default: defaultValue,
+	}, &value)
+	if err != nil {
+		return nil, err
+	}
+	return config.ParseModelParameters(value)
 }
 
 func ensureAPIKey(cfg *config.Config, provider string) error {
@@ -179,9 +206,18 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 	}
 }
 
-// RunModelWizard runs the full interactive setup: provider → API key (if missing) → model.
-// It saves the config once at the end.
+// RunModelWizard configures the default (medium) model tier.
 func RunModelWizard(cfg *config.Config) error {
+	return RunModelWizardForLevel(cfg, config.ModelLevelDefault)
+}
+
+// RunModelWizardForLevel runs provider -> API key -> model -> parameters setup
+// for one of the light, default, or high tiers. It saves once at the end.
+func RunModelWizardForLevel(cfg *config.Config, level string) error {
+	if !config.ValidModelLevel(level) {
+		return fmt.Errorf("invalid model level %q: must be light, default, or high", level)
+	}
+	fmt.Printf("Configuring %s model level.\n", level)
 	provider, err := pickProvider()
 	if err != nil {
 		return err
@@ -203,9 +239,32 @@ func RunModelWizard(cfg *config.Config) error {
 	if err != nil {
 		return err
 	}
+	current := cfg.Provider.ModelParameters
+	switch level {
+	case config.ModelLevelLight:
+		current = cfg.Provider.ParametersLight
+	case config.ModelLevelHigh:
+		current = cfg.Provider.ParametersHigh
+	}
+	parameters, err := promptModelParameters(provider, model, current)
+	if err != nil {
+		return fmt.Errorf("model parameters: %w", err)
+	}
 
-	cfg.Provider.Default = provider
-	cfg.Provider.Model = model
+	switch level {
+	case config.ModelLevelLight:
+		cfg.Provider.ProviderLight = provider
+		cfg.Provider.ModelLight = model
+		cfg.Provider.ParametersLight = parameters
+	case config.ModelLevelHigh:
+		cfg.Provider.ProviderHigh = provider
+		cfg.Provider.ModelHigh = model
+		cfg.Provider.ParametersHigh = parameters
+	default:
+		cfg.Provider.Default = provider
+		cfg.Provider.Model = model
+		cfg.Provider.ModelParameters = parameters
+	}
 
 	return wizardSaveConfig(cfg)
 }

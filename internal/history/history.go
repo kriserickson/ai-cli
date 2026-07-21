@@ -71,11 +71,17 @@ type CommandAttempt struct {
 
 func NewSession(instruction, cwd string, cfg *config.Config, shellInfo shell.Info) *Session {
 	now := time.Now().UTC()
+	provider := cfg.Provider.Default
+	model := cfg.Provider.Model
+	if selection, err := cfg.ActiveSelection(); err == nil {
+		provider = selection.Provider
+		model = selection.Model
+	}
 	return &Session{
 		ID:               strconv.FormatInt(now.UnixNano(), 10),
 		Instruction:      instruction,
-		Provider:         cfg.Provider.Default,
-		Model:            cfg.Provider.Model,
+		Provider:         provider,
+		Model:            model,
 		OS:               shellInfo.OS,
 		Shell:            shellInfo.Shell,
 		ShellVersion:     shellInfo.Version,

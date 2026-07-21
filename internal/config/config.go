@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -13,6 +14,10 @@ const (
 	ProviderOpenRouter = "openrouter"
 	ProviderLocal      = "local"
 
+	ModelLevelLight   = "light"
+	ModelLevelDefault = "default"
+	ModelLevelHigh    = "high"
+
 	DebugNone   = "none"
 	DebugScreen = "screen"
 	DebugFile   = "file"
@@ -22,6 +27,8 @@ const (
 	ToolCallingAlwaysPrompt    = "always_prompt"    // Prompt the user before every tool call
 	ToolCallingDangerousPrompt = "dangerous_prompt" // Only prompt when a tool hits a safety rule
 	ToolCallingAlwaysAllow     = "always_allow"     // Execute all tools without prompting
+
+	allowlistGit = "git"
 )
 
 type Config struct {
@@ -30,14 +37,79 @@ type Config struct {
 	History          HistoryConfig  `toml:"history"`
 	Debug            string         `toml:"debug"`              // "none", "screen", or "file"
 	DebugLogPayloads bool           `toml:"debug_log_payloads"` // Only used for debug=file
+	// ModelLevel is a runtime-only selection. It is set by --light/--high or
+	// interactive mode and is intentionally not persisted.
+	ModelLevel string `toml:"-"`
 }
 
 type ProviderConfig struct {
-	Default    string         `toml:"default"`
-	Model      string         `toml:"model"`
-	OpenAI     ProviderDetail `toml:"openai"`
-	OpenRouter ProviderDetail `toml:"openrouter"`
-	Local      ProviderDetail `toml:"local"`
+	Default            string         `toml:"default"`
+	Model              string         `toml:"model"`
+	ProviderLight      string         `toml:"provider_light,omitempty"`
+	ModelLight         string         `toml:"model_light,omitempty"`
+	ProviderHigh       string         `toml:"provider_high,omitempty"`
+	ModelHigh          string         `toml:"model_high,omitempty"`
+	ModelParameters    map[string]any `toml:"model_parameters,omitempty"`
+	ParametersLight    map[string]any `toml:"parameters_light,omitempty"`
+	ParametersHigh     map[string]any `toml:"parameters_high,omitempty"`
+	UpgradeModelOnFail bool           `toml:"upgrade_model_on_fail"`
+	OpenAI             ProviderDetail `toml:"openai"`
+	OpenRouter         ProviderDetail `toml:"openrouter"`
+	Local              ProviderDetail `toml:"local"`
+}
+
+// ModelSelection is the provider, model, and request parameters for a model tier.
+type ModelSelection struct {
+	Provider   string
+	Model      string
+	Parameters map[string]any
+}
+
+// ValidModelLevel reports whether level is light, default, or high.
+func ValidModelLevel(level string) bool {
+	switch level {
+	case ModelLevelLight, ModelLevelDefault, ModelLevelHigh:
+		return true
+	}
+	return false
+}
+
+// Selection returns the configured provider, model, and parameters for level.
+// A blank light/high provider inherits the default provider.
+func (p ProviderConfig) Selection(level string) (ModelSelection, error) {
+	selection := ModelSelection{Provider: p.Default}
+	switch level {
+	case ModelLevelDefault, "":
+		selection.Model = p.Model
+		selection.Parameters = p.ModelParameters
+	case ModelLevelLight:
+		if p.ProviderLight != "" {
+			selection.Provider = p.ProviderLight
+		}
+		selection.Model = p.ModelLight
+		selection.Parameters = p.ParametersLight
+	case ModelLevelHigh:
+		if p.ProviderHigh != "" {
+			selection.Provider = p.ProviderHigh
+		}
+		selection.Model = p.ModelHigh
+		selection.Parameters = p.ParametersHigh
+	default:
+		return ModelSelection{}, fmt.Errorf("invalid model level %q: must be light, default, or high", level)
+	}
+	if selection.Model == "" {
+		return ModelSelection{}, fmt.Errorf("no %s model configured; run: ai set-model %s", level, level)
+	}
+	return selection, nil
+}
+
+// ActiveSelection returns the runtime-selected model tier.
+func (c *Config) ActiveSelection() (ModelSelection, error) {
+	level := c.ModelLevel
+	if level == "" {
+		level = ModelLevelDefault
+	}
+	return c.Provider.Selection(level)
 }
 
 type ProviderDetail struct {
@@ -74,8 +146,9 @@ func ValidToolCallingMode(mode string) bool {
 func DefaultConfig() *Config {
 	return &Config{
 		Provider: ProviderConfig{
-			Default: ProviderOpenRouter,
-			Model:   "anthropic/claude-3.5-sonnet",
+			Default:            ProviderOpenRouter,
+			Model:              "anthropic/claude-3.5-sonnet",
+			UpgradeModelOnFail: false,
 			OpenAI: ProviderDetail{
 				BaseURL: "https://api.openai.com/v1",
 			},
@@ -90,7 +163,7 @@ func DefaultConfig() *Config {
 			AlwaysConfirm:     false,
 			ToolCalling:       ToolCallingNever,
 			MinCertainty:      80,
-			AllowlistPrefixes: []string{"git", "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
+			AllowlistPrefixes: []string{allowlistGit, "ls", "cat", "echo", "pwd", "head", "tail", "wc", "grep", "find", "which", "man"},
 		},
 		History: HistoryConfig{
 			IncludeLLMOutput:  true,
@@ -102,6 +175,7 @@ func DefaultConfig() *Config {
 		},
 		Debug:            DebugNone,
 		DebugLogPayloads: false,
+		ModelLevel:       ModelLevelDefault,
 	}
 }
 

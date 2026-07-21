@@ -21,6 +21,12 @@ import (
 
 var runnerStdinIsTTY = stdinIsTTY
 
+const (
+	responseTypeCommands    = "commands"
+	responseTypeConfig      = "config"
+	responseTypeExplanation = "explanation"
+)
+
 type Interface interface {
 	RunInstruction(instruction string) error
 	RetryLastFailed(depth int) error
@@ -62,6 +68,16 @@ func New(cfg *config.Config, client llm.Client, shellInfo shell.Info, opts ...Op
 		opt(r)
 	}
 	return r
+}
+
+// SetModelLevel changes the active model tier for subsequent requests.
+func (r *Runner) SetModelLevel(level string) error {
+	return llm.SetModelLevel(r.client, level)
+}
+
+// ModelLevel returns the active model tier.
+func (r *Runner) ModelLevel() string {
+	return llm.CurrentModelLevel(r.client)
 }
 
 func (r *Runner) RunInstruction(instruction string) error {
@@ -169,7 +185,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 	}
 
 	switch resp.Type {
-	case "commands":
+	case responseTypeCommands:
 		runResult, runErr := executor.RunWithResults(resp.Commands, r.cfg, r.shellInfo, r.explain)
 		if runResult != nil {
 			session.RecordExecutions(attempt, runResult.Commands)
@@ -191,7 +207,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 
 		r.lastFailed = session
 		return runErr
-	case "config":
+	case responseTypeConfig:
 		if err := applyConfig(resp, r.cfg); err != nil {
 			session.MarkStatus("failed")
 			r.lastFailed = session
@@ -203,7 +219,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 		r.saveSession(session)
 		r.updateConversationHistory(userMessage, resp, kind)
 		return nil
-	case "explanation":
+	case responseTypeExplanation:
 		// Print the explanation as primary output (not faint) since it is the complete response.
 		fmt.Println(resp.Explanation)
 		session.MarkStatus("completed")
@@ -224,6 +240,21 @@ func (r *Runner) retrySession(session *history.Session, systemPrompt string, dep
 		r.lastFailed = session
 		return fmt.Errorf("command failed after %d AI retries", session.RetryCount)
 	}
+
+	restoreLevel := func() {}
+	if r.cfg.Provider.UpgradeModelOnFail {
+		if controller, ok := r.client.(llm.ModelLevelController); ok {
+			restore, upgraded, err := controller.UpgradeModelLevel()
+			if err != nil {
+				return fmt.Errorf("upgrade model after command failure: %w", err)
+			}
+			if upgraded {
+				restoreLevel = restore
+				fmt.Fprintf(os.Stderr, "Command failed; retrying with %s model level.\n", controller.ModelLevel())
+			}
+		}
+	}
+	defer restoreLevel()
 
 	session.RetryCount++
 	message := history.BuildRetryMessage(session, depth)

@@ -6,6 +6,16 @@ import (
 	"strconv"
 )
 
+const (
+	keyLLMKey            = "llm_key"
+	keyIncludeLLMOutput  = "include_llm_output"
+	keyIncludeDebug      = "include_debug"
+	keyAskOnError        = "ask_on_error"
+	keyAutoCheckOnError  = "auto_check_on_error"
+	keyRetryMaxAttempts  = "retry_max_attempts"
+	keyRetryContextDepth = "retry_context_depth"
+)
+
 // ApplyAction applies an LLM-initiated config change and saves the result.
 // The action/key/value correspond to the structured response from the LLM
 // (e.g. action="set_model", key="model", value="gpt-4o").
@@ -23,7 +33,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 		cfg.Provider.Default = value
 	case "set_key":
 		switch key {
-		case "llm_key":
+		case keyLLMKey:
 			switch cfg.Provider.Default {
 			case ProviderOpenAI:
 				cfg.Provider.OpenAI.APIKey = value
@@ -62,31 +72,31 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 		}
 	case "set_history":
 		switch key {
-		case "include_llm_output":
+		case keyIncludeLLMOutput:
 			b, err := ParseBool(value)
 			if err != nil {
 				return fmt.Errorf("history.include_llm_output %w", err)
 			}
 			cfg.History.IncludeLLMOutput = b
-		case "include_debug":
+		case keyIncludeDebug:
 			b, err := ParseBool(value)
 			if err != nil {
 				return fmt.Errorf("history.include_debug %w", err)
 			}
 			cfg.History.IncludeDebug = b
-		case "ask_on_error":
+		case keyAskOnError:
 			b, err := ParseBool(value)
 			if err != nil {
 				return fmt.Errorf("history.ask_on_error %w", err)
 			}
 			cfg.History.AskOnError = b
-		case "auto_check_on_error":
+		case keyAutoCheckOnError:
 			b, err := ParseBool(value)
 			if err != nil {
 				return fmt.Errorf("history.auto_check_on_error %w", err)
 			}
 			cfg.History.AutoCheckOnError = b
-		case "retry_max_attempts":
+		case keyRetryMaxAttempts:
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return fmt.Errorf("history.retry_max_attempts must be a number: %w", err)
@@ -95,7 +105,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 				return errors.New("history.retry_max_attempts must be 0 or greater")
 			}
 			cfg.History.RetryMaxAttempts = n
-		case "retry_context_depth":
+		case keyRetryContextDepth:
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return fmt.Errorf("history.retry_context_depth must be a number: %w", err)

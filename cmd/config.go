@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
@@ -12,47 +13,88 @@ import (
 	"github.com/kriserickson/ai-cli/internal/config"
 )
 
+const (
+	keyProvider                 = "provider"
+	keyModel                    = "model"
+	keyProviderLight            = "provider_light"
+	keyModelLight               = "model_light"
+	keyProviderHigh             = "provider_high"
+	keyModelHigh                = "model_high"
+	keyUpgradeModelOnFail       = "upgrade_model_on_fail"
+	keyLLMKey                   = "llm_key"
+	keyLLMURL                   = "llm_url"
+	keyToolCalling              = "tool_calling"
+	keyMinCertainty             = "min_certainty"
+	keyHistoryIncludeLLMOutput  = "history_include_llm_output"
+	keyHistoryRetryMaxAttempts  = "history_retry_max_attempts"
+	keyHistoryRetryContextDepth = "history_retry_context_depth"
+	keyAlwaysConfirm            = "always_confirm"
+	keyModelParameters          = "model_parameters"
+	keyParametersLight          = "parameters_light"
+	keyParametersHigh           = "parameters_high"
+	keyDebug                    = "debug"
+	keyHistoryIncludeDebug      = "history_include_debug"
+	keyHistoryAskOnError        = "history_ask_on_error"
+	keyHistoryAutoCheckOnError  = "history_auto_check_on_error"
+	keyDebugLogPayloads         = "debug_log_payloads"
+	boolTrue                    = "true"
+	boolFalse                   = "false"
+	subCmdConfig                = "config"
+	keyDefault                  = "default"
+)
+
 // configKeys is the canonical list of settable/gettable config keys used for shell completion.
 var configKeys = []string{
-	"provider",
-	"model",
-	"llm_key",
-	"llm_url",
-	"always_confirm",
-	"tool_calling",
-	"min_certainty",
-	"debug",
-	"history_include_llm_output",
-	"history_include_debug",
-	"history_ask_on_error",
-	"history_auto_check_on_error",
-	"history_retry_max_attempts",
-	"history_retry_context_depth",
-	"debug_log_payloads",
+	keyProvider,
+	keyModel,
+	keyProviderLight,
+	keyModelLight,
+	keyProviderHigh,
+	keyModelHigh,
+	keyModelParameters,
+	keyParametersLight,
+	keyParametersHigh,
+	keyUpgradeModelOnFail,
+	keyLLMKey,
+	keyLLMURL,
+	keyAlwaysConfirm,
+	keyToolCalling,
+	keyMinCertainty,
+	keyDebug,
+	keyHistoryIncludeLLMOutput,
+	keyHistoryIncludeDebug,
+	keyHistoryAskOnError,
+	keyHistoryAutoCheckOnError,
+	keyHistoryRetryMaxAttempts,
+	keyHistoryRetryContextDepth,
+	keyDebugLogPayloads,
 }
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	"always_confirm":              {"true", "false"},
-	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
-	"debug":                       {config.DebugNone, config.DebugScreen, config.DebugFile},
-	"history_include_llm_output":  {"true", "false"},
-	"history_include_debug":       {"true", "false"},
-	"history_ask_on_error":        {"true", "false"},
-	"history_auto_check_on_error": {"true", "false"},
-	"debug_log_payloads":          {"true", "false"},
+	keyProvider:                {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	keyProviderLight:           {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	keyProviderHigh:            {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	keyAlwaysConfirm:           {boolTrue, boolFalse},
+	keyToolCalling:             {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
+	keyDebug:                   {config.DebugNone, config.DebugScreen, config.DebugFile},
+	keyHistoryIncludeLLMOutput: {boolTrue, boolFalse},
+	keyHistoryIncludeDebug:     {boolTrue, boolFalse},
+	keyHistoryAskOnError:       {boolTrue, boolFalse},
+	keyHistoryAutoCheckOnError: {boolTrue, boolFalse},
+	keyDebugLogPayloads:        {boolTrue, boolFalse},
+	keyUpgradeModelOnFail:      {boolTrue, boolFalse},
 }
 
 func init() {
 	configCmd := &cobra.Command{
-		Use:   "config",
+		Use:   subCmdConfig,
 		Short: "Manage AI CLI configuration",
 	}
 
 	configCmd.AddCommand(
 		&cobra.Command{
-			Use:   "show",
+			Use:   subCmdShow,
 			Short: "Show current configuration",
 			RunE: func(_ *cobra.Command, _ []string) error {
 				cfg, err := config.Load()
@@ -137,37 +179,53 @@ func currentProviderDetail(cfg *config.Config) *config.ProviderDetail {
 
 func getConfigValue(cfg *config.Config, key string) (string, error) {
 	switch key {
-	case "provider", "default":
+	case keyProvider, keyDefault:
 		return cfg.Provider.Default, nil
-	case "model":
+	case keyModel:
 		return cfg.Provider.Model, nil
-	case "llm_key":
+	case keyProviderLight:
+		return cfg.Provider.ProviderLight, nil
+	case keyModelLight:
+		return cfg.Provider.ModelLight, nil
+	case keyProviderHigh:
+		return cfg.Provider.ProviderHigh, nil
+	case keyModelHigh:
+		return cfg.Provider.ModelHigh, nil
+	case keyModelParameters:
+		return formatModelParameters(cfg.Provider.ModelParameters)
+	case keyParametersLight:
+		return formatModelParameters(cfg.Provider.ParametersLight)
+	case keyParametersHigh:
+		return formatModelParameters(cfg.Provider.ParametersHigh)
+	case keyUpgradeModelOnFail:
+		return strconv.FormatBool(cfg.Provider.UpgradeModelOnFail), nil
+	case keyLLMKey:
 		return maskKey(currentProviderDetail(cfg).APIKey), nil
-	case "llm_url":
+	case keyLLMURL:
 		return currentProviderDetail(cfg).BaseURL, nil
-	case "always_confirm":
+	case keyAlwaysConfirm:
 		return strconv.FormatBool(cfg.Safety.AlwaysConfirm), nil
-	case "tool_calling":
+	case keyToolCalling:
 		return cfg.Safety.ToolCalling, nil
-	case "min_certainty":
+	case keyMinCertainty:
 		return strconv.Itoa(cfg.Safety.MinCertainty), nil
 	case "allowlist":
 		return strings.Join(cfg.Safety.AllowlistPrefixes, ", "), nil
-	case "debug":
+	case keyDebug:
 		return cfg.Debug, nil
-	case "history_include_llm_output":
+	case keyHistoryIncludeLLMOutput:
 		return strconv.FormatBool(cfg.History.IncludeLLMOutput), nil
-	case "history_include_debug":
+	case keyHistoryIncludeDebug:
 		return strconv.FormatBool(cfg.History.IncludeDebug), nil
-	case "history_ask_on_error":
+	case keyHistoryAskOnError:
 		return strconv.FormatBool(cfg.History.AskOnError), nil
-	case "history_auto_check_on_error":
+	case keyHistoryAutoCheckOnError:
 		return strconv.FormatBool(cfg.History.AutoCheckOnError), nil
-	case "history_retry_max_attempts":
+	case keyHistoryRetryMaxAttempts:
 		return strconv.Itoa(cfg.History.RetryMaxAttempts), nil
-	case "history_retry_context_depth":
+	case keyHistoryRetryContextDepth:
 		return strconv.Itoa(cfg.History.RetryContextDepth), nil
-	case "debug_log_payloads":
+	case keyDebugLogPayloads:
 		return strconv.FormatBool(cfg.DebugLogPayloads), nil
 	default:
 		return "", fmt.Errorf("unknown config key: %s", key)
@@ -176,94 +234,145 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 
 func setConfigValue(cfg *config.Config, key, value string) error {
 	switch key {
-	case "provider", "default":
+	case keyProvider, keyDefault:
 		if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
 			return errors.New("provider must be 'openai', 'openrouter', or 'local'")
 		}
 		cfg.Provider.Default = value
-	case "model":
+	case keyModel:
 		cfg.Provider.Model = value
-	case "llm_key":
-		currentProviderDetail(cfg).APIKey = value
-	case "llm_url":
-		currentProviderDetail(cfg).BaseURL = value
-	case "always_confirm":
+	case keyProviderLight:
+		if err := validateProvider(value); err != nil {
+			return err
+		}
+		cfg.Provider.ProviderLight = value
+	case keyModelLight:
+		cfg.Provider.ModelLight = value
+	case keyProviderHigh:
+		if err := validateProvider(value); err != nil {
+			return err
+		}
+		cfg.Provider.ProviderHigh = value
+	case keyModelHigh:
+		cfg.Provider.ModelHigh = value
+	case keyModelParameters, keyParametersLight, keyParametersHigh:
+		parameters, err := config.ParseModelParameters(value)
+		if err != nil {
+			return fmt.Errorf("%s %w", key, err)
+		}
+		switch key {
+		case keyModelParameters:
+			cfg.Provider.ModelParameters = parameters
+		case keyParametersLight:
+			cfg.Provider.ParametersLight = parameters
+		case keyParametersHigh:
+			cfg.Provider.ParametersHigh = parameters
+		}
+	case keyUpgradeModelOnFail:
 		b, err := config.ParseBool(value)
 		if err != nil {
-			return fmt.Errorf("always_confirm %w", err)
+			return fmt.Errorf("%s %w", keyUpgradeModelOnFail, err)
+		}
+		cfg.Provider.UpgradeModelOnFail = b
+	case keyLLMKey:
+		currentProviderDetail(cfg).APIKey = value
+	case keyLLMURL:
+		currentProviderDetail(cfg).BaseURL = value
+	case keyAlwaysConfirm:
+		b, err := config.ParseBool(value)
+		if err != nil {
+			return fmt.Errorf("%s %w", keyAlwaysConfirm, err)
 		}
 		cfg.Safety.AlwaysConfirm = b
-	case "tool_calling":
+	case keyToolCalling:
 		if !config.ValidToolCallingMode(value) {
 			return errors.New("tool_calling must be 'never', 'always_prompt', 'dangerous_prompt', or 'always_allow'")
 		}
 		cfg.Safety.ToolCalling = value
-	case "min_certainty":
+	case keyMinCertainty:
 		n, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("min_certainty must be a number: %w", err)
+			return fmt.Errorf("%s must be a number: %w", keyMinCertainty, err)
 		}
 		if n < 0 || n > 100 {
-			return errors.New("min_certainty must be between 0 and 100")
+			return fmt.Errorf("%s must be between 0 and 100", keyMinCertainty)
 		}
 		cfg.Safety.MinCertainty = n
-	case "debug":
+	case keyDebug:
 		if value != config.DebugNone && value != config.DebugScreen && value != config.DebugFile {
 			return fmt.Errorf("debug must be '%s', '%s', or '%s'", config.DebugNone, config.DebugScreen, config.DebugFile)
 		}
 		cfg.Debug = value
-	case "history_include_llm_output":
+	case keyHistoryIncludeLLMOutput:
 		b, err := config.ParseBool(value)
 		if err != nil {
-			return fmt.Errorf("history_include_llm_output %w", err)
+			return fmt.Errorf("%s %w", keyHistoryIncludeLLMOutput, err)
 		}
 		cfg.History.IncludeLLMOutput = b
-	case "history_include_debug":
+	case keyHistoryIncludeDebug:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("history_include_debug %w", err)
 		}
 		cfg.History.IncludeDebug = b
-	case "history_ask_on_error":
+	case keyHistoryAskOnError:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("history_ask_on_error %w", err)
 		}
 		cfg.History.AskOnError = b
-	case "history_auto_check_on_error":
+	case keyHistoryAutoCheckOnError:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("history_auto_check_on_error %w", err)
 		}
 		cfg.History.AutoCheckOnError = b
-	case "history_retry_max_attempts":
+	case keyHistoryRetryMaxAttempts:
 		n, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("history_retry_max_attempts must be a number: %w", err)
+			return fmt.Errorf("%s must be a number: %w", keyHistoryRetryMaxAttempts, err)
 		}
 		if n < 0 {
-			return errors.New("history_retry_max_attempts must be 0 or greater")
+			return fmt.Errorf("%s must be 0 or greater", keyHistoryRetryMaxAttempts)
 		}
 		cfg.History.RetryMaxAttempts = n
-	case "history_retry_context_depth":
+	case keyHistoryRetryContextDepth:
 		n, err := strconv.Atoi(value)
 		if err != nil {
-			return fmt.Errorf("history_retry_context_depth must be a number: %w", err)
+			return fmt.Errorf("%s must be a number: %w", keyHistoryRetryContextDepth, err)
 		}
 		if n <= 0 {
-			return errors.New("history_retry_context_depth must be greater than 0")
+			return fmt.Errorf("%s must be greater than 0", keyHistoryRetryContextDepth)
 		}
 		cfg.History.RetryContextDepth = n
-	case "debug_log_payloads":
+	case keyDebugLogPayloads:
 		b, err := config.ParseBool(value)
 		if err != nil {
 			return fmt.Errorf("debug_log_payloads %w", err)
 		}
 		cfg.DebugLogPayloads = b
 	default:
-		return fmt.Errorf("unknown config key: %s\nValid keys: provider, model, llm_key, llm_url, always_confirm, tool_calling, min_certainty, debug, history_include_llm_output, history_include_debug, history_ask_on_error, history_auto_check_on_error, history_retry_max_attempts, history_retry_context_depth, debug_log_payloads", key)
+		return fmt.Errorf("unknown config key: %s\nValid keys: %s", key, strings.Join(configKeys, ", "))
 	}
 	return nil
+}
+
+func validateProvider(value string) error {
+	if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
+		return errors.New("provider must be 'openai', 'openrouter', or 'local'")
+	}
+	return nil
+}
+
+func formatModelParameters(parameters map[string]any) (string, error) {
+	if len(parameters) == 0 {
+		return "{}", nil
+	}
+	data, err := json.Marshal(parameters)
+	if err != nil {
+		return "", fmt.Errorf("format model parameters: %w", err)
+	}
+	return string(data), nil
 }
 
 func maskKey(key string) string {

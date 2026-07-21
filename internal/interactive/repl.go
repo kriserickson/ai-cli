@@ -24,12 +24,22 @@ var (
 	replNewReadline = func(cfg *readline.Config) (replLineReader, error) { return readline.NewEx(cfg) }
 )
 
+const (
+	replCmdStatus   = "status"
+	replCmdDoctor   = "doctor"
+	replCmdSetModel = "set-model"
+	replCmdRetry    = "retry"
+)
+
 // BuiltinCommands holds handlers for built-in REPL commands so the interactive
 // package doesn't need to import the cmd package (which would be circular).
 type BuiltinCommands struct {
 	Status   func() error
 	Doctor   func() error
-	SetModel func() error
+	SetModel func(level string) error
+	// ModelLevel gets the current model level when level is blank, or switches
+	// the current interactive session when level is provided.
+	ModelLevel func(level string) (string, error)
 	// ConfigRun handles "config show", "config get <key>", "config set <key> <val>".
 	// args is the slice after "config", e.g. ["show"] or ["get", "model"].
 	ConfigRun func(args []string) error
@@ -82,20 +92,54 @@ func Run(version string, cmds BuiltinCommands, instructionRunner runner.Interfac
 		case input == "version":
 			fmt.Printf("ai %s\n", version)
 
-		case input == "status":
+		case input == replCmdStatus:
 			if err := cmds.Status(); err != nil {
 				color.Red("Error: %v", err)
 			}
 
-		case input == "doctor":
+		case input == replCmdDoctor:
 			if err := cmds.Doctor(); err != nil {
 				color.Red("Error: %v", err)
 			}
 
-		case input == "set-model":
-			if err := cmds.SetModel(); err != nil {
+		case input == replCmdSetModel || strings.HasPrefix(input, replCmdSetModel+" "):
+			parts := strings.Fields(input)
+			if len(parts) > 2 {
+				color.Red("Error: usage: set-model [light|default|high]")
+				continue
+			}
+			level := config.ModelLevelDefault
+			if len(parts) == 2 {
+				level = parts[1]
+			}
+			if !config.ValidModelLevel(level) {
+				color.Red("Error: model level must be light, default, or high")
+				continue
+			}
+			if err := cmds.SetModel(level); err != nil {
 				color.Red("Error: %v", err)
 			}
+
+		case input == "model-level" || strings.HasPrefix(input, "model-level "):
+			parts := strings.Fields(input)
+			if len(parts) > 2 {
+				color.Red("Error: usage: model-level [light|default|high]")
+				continue
+			}
+			level := ""
+			if len(parts) == 2 {
+				level = parts[1]
+				if !config.ValidModelLevel(level) {
+					color.Red("Error: model level must be light, default, or high")
+					continue
+				}
+			}
+			current, err := cmds.ModelLevel(level)
+			if err != nil {
+				color.Red("Error: %v", err)
+				continue
+			}
+			fmt.Printf("Model level: %s\n", current)
 
 		case input == "config" || strings.HasPrefix(input, "config "):
 			parts := strings.Fields(input)
@@ -115,7 +159,7 @@ func Run(version string, cmds BuiltinCommands, instructionRunner runner.Interfac
 				color.Red("Error: %v", err)
 			}
 
-		case input == "retry" || strings.HasPrefix(input, "retry "):
+		case input == replCmdRetry || strings.HasPrefix(input, replCmdRetry+" "):
 			depth, err := runner.ParseRetryDepth(input)
 			if err != nil {
 				color.Red("Error: %v", err)
@@ -138,9 +182,10 @@ func printHelp() {
 	fmt.Println("Built-in commands:")
 	fmt.Printf("  %-30s %s\n", "help", "Show this help message")
 	fmt.Printf("  %-30s %s\n", "version", "Print the current version")
-	fmt.Printf("  %-30s %s\n", "status", "Show current configuration status")
-	fmt.Printf("  %-30s %s\n", "doctor", "Check and repair configuration")
-	fmt.Printf("  %-30s %s\n", "set-model", "Interactively select a provider and model")
+	fmt.Printf("  %-30s %s\n", replCmdStatus, "Show current configuration status")
+	fmt.Printf("  %-30s %s\n", replCmdDoctor, "Check and repair configuration")
+	fmt.Printf("  %-30s %s\n", "set-model [level]", "Configure the light, default, or high model")
+	fmt.Printf("  %-30s %s\n", "model-level [level]", "Show or switch the current model level")
 	fmt.Printf("  %-30s %s\n", "config show", "Show current configuration")
 	fmt.Printf("  %-30s %s\n", "config get <key>", "Get a config value")
 	fmt.Printf("  %-30s %s\n", "config set <key> <value>", "Set a config value")

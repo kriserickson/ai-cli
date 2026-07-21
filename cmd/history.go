@@ -12,6 +12,8 @@ import (
 	"github.com/kriserickson/ai-cli/internal/history"
 )
 
+const responseCommands = "commands"
+
 var (
 	historyVerbose bool
 	historyCount   int
@@ -29,7 +31,7 @@ func init() {
 	historyCmd.PersistentFlags().IntVar(&historyCount, "count", 10, "number of history sessions to list")
 
 	listCmd := &cobra.Command{
-		Use:   "list",
+		Use:   subCmdList,
 		Short: "List recent AI sessions",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -93,7 +95,8 @@ func listHistory(verbose bool, count int) error {
 
 	for i := range sessions {
 		session := &sessions[i]
-		fmt.Printf("%s : %s retries=%d model=%s\n  prompt: %s\n  command: %s\n",
+		fmt.Printf(
+			"%s : %s retries=%d model=%s\n  prompt: %s\n  command: %s\n",
 			session.UpdatedAt.Local().Format(time.DateTime),
 			session.Status,
 			session.RetryCount,
@@ -138,11 +141,11 @@ func showHistory(id string) error {
 			}
 			if exchange.Response != nil {
 				switch exchange.Response.Type {
-				case "commands":
+				case responseCommands:
 					for _, command := range exchange.Response.Commands {
 						fmt.Printf("    command: %s\n", command.Command)
 					}
-				case "config":
+				case subCmdConfig:
 					fmt.Printf("    config: %s %s = %s\n", exchange.Response.Action, exchange.Response.Key, config.DisplayValue(exchange.Response.Action, exchange.Response.Key, exchange.Response.Value))
 				}
 			}
@@ -244,7 +247,7 @@ func historyListExecution(session *history.Session) *history.CommandAttempt {
 func historyListExchange(session *history.Session) *history.Exchange {
 	for i := len(session.Exchanges) - 1; i >= 0; i-- {
 		exchange := &session.Exchanges[i]
-		if exchange.Response == nil || exchange.Response.Type != "commands" || len(exchange.Response.Commands) == 0 {
+		if exchange.Response == nil || exchange.Response.Type != responseCommands || len(exchange.Response.Commands) == 0 {
 			if exchange.Error == "" {
 				continue
 			}

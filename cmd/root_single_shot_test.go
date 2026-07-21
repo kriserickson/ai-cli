@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,60 @@ import (
 
 	"github.com/kriserickson/ai-cli/internal/config"
 )
+
+func TestRunRootSingleShot_ModelLevelFlags(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		light     bool
+		high      bool
+		wantModel string
+	}{
+		{"light", true, false, "gpt-light"},
+		{"high", false, true, "gpt-high"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotModel string
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				var request map[string]any
+				_ = json.NewDecoder(r.Body).Decode(&request)
+				gotModel, _ = request["model"].(string)
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"type\":\"commands\",\"commands\":[]}"}}]}`))
+			}))
+			defer server.Close()
+
+			tempHome(t)
+			cfg := config.DefaultConfig()
+			cfg.Provider.Default = config.ProviderOpenAI
+			cfg.Provider.Model = "gpt-default"
+			cfg.Provider.ModelLight = "gpt-light"
+			cfg.Provider.ModelHigh = "gpt-high"
+			cfg.Provider.OpenAI.APIKey = "sk-test"
+			cfg.Provider.OpenAI.BaseURL = server.URL
+			if err := config.Save(cfg); err != nil {
+				t.Fatalf("Save: %v", err)
+			}
+
+			lightFlag, highFlag = tt.light, tt.high
+			t.Cleanup(func() { lightFlag, highFlag = false, false })
+			if err := runRoot(nil, []string{"test"}); err != nil {
+				t.Fatalf("runRoot: %v", err)
+			}
+			if gotModel != tt.wantModel {
+				t.Fatalf("request model = %q, want %q", gotModel, tt.wantModel)
+			}
+		})
+	}
+}
+
+func TestRunRootRejectsBothModelLevelFlags(t *testing.T) {
+	tempHome(t)
+	lightFlag, highFlag = true, true
+	t.Cleanup(func() { lightFlag, highFlag = false, false })
+	err := runRoot(nil, []string{"test"})
+	if err == nil || !strings.Contains(err.Error(), "cannot be used together") {
+		t.Fatalf("runRoot error = %v", err)
+	}
+}
 
 func saveRootConfig(t *testing.T, serverURL string) {
 	t.Helper()
