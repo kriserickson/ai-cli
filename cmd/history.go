@@ -31,7 +31,7 @@ func init() {
 	historyCmd.PersistentFlags().IntVar(&historyCount, "count", 10, "number of history sessions to list")
 
 	listCmd := &cobra.Command{
-		Use:   "list",
+		Use:   subCmdList,
 		Short: "List recent AI sessions",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
@@ -95,7 +95,8 @@ func listHistory(verbose bool, count int) error {
 
 	for i := range sessions {
 		session := &sessions[i]
-		fmt.Printf("%s : %s retries=%d model=%s\n  prompt: %s\n  command: %s\n",
+		fmt.Printf(
+			"%s : %s retries=%d model=%s\n  prompt: %s\n  command: %s\n",
 			session.UpdatedAt.Local().Format(time.DateTime),
 			session.Status,
 			session.RetryCount,

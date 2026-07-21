@@ -43,7 +43,7 @@ func init() {
 			},
 		},
 		&cobra.Command{
-			Use:   "list",
+			Use:   subCmdList,
 			Short: "List all memories",
 			Args:  cobra.NoArgs,
 			RunE: func(_ *cobra.Command, _ []string) error {

@@ -20,9 +20,14 @@ import (
 )
 
 const (
-	windows    = "windows"
-	commandAdd = "add"
-	subCmdGet  = "get"
+	windows      = "windows"
+	commandAdd   = "add"
+	subCmdGet    = "get"
+	subCmdShow   = "show"
+	subCmdSet    = "set"
+	subCmdList   = "list"
+	subCmdRemove = "remove"
+	shellZsh     = "zsh"
 )
 
 var (
@@ -148,7 +153,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 					return err
 				}
 				switch args[0] {
-				case "show":
+				case subCmdShow:
 					data, err := toml.Marshal(config.RedactedCopy(cfg))
 					if err != nil {
 						return err
@@ -163,7 +168,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 						return err
 					}
 					fmt.Println(val)
-				case "set":
+				case subCmdSet:
 					if len(args) < 3 {
 						return errors.New("config set requires key and value arguments")
 					}
@@ -184,7 +189,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 					return listMemories()
 				}
 				switch args[0] {
-				case "list":
+				case subCmdList:
 					return listMemories()
 				case commandAdd:
 					if len(args) < 3 {
@@ -196,7 +201,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 						return err
 					}
 					fmt.Printf("Memory %q added.\n", keyword)
-				case "remove":
+				case subCmdRemove:
 					if len(args) < 2 {
 						return errors.New("usage: memory remove <keyword>")
 					}
@@ -214,14 +219,14 @@ func runRoot(_ *cobra.Command, args []string) error {
 					return listHistory(historyVerbose, historyCount)
 				}
 				switch args[0] {
-				case "list":
+				case subCmdList:
 					return listHistory(historyVerbose, historyCount)
-				case "show":
+				case subCmdShow:
 					if len(args) < 2 {
 						return errors.New("history show requires an id argument")
 					}
 					return showHistory(args[1])
-				case "remove":
+				case subCmdRemove:
 					if len(args) < 2 {
 						return errors.New("history remove requires an id argument")
 					}
