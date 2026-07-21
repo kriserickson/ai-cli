@@ -18,22 +18,22 @@ import (
 )
 
 const (
-	maxOutputBytes       = 4096
-	windowsOS            = "windows"
-	toolExecTimeout      = 30 * time.Second
-	toolListDirectory    = "list_directory"
-	toolReadFile         = "read_file"
-	toolCommandHelp      = "command_help"
-	toolListMemories     = "list_memories"
-	toolListProcesses    = "list_processes"
-	toolSystemResources  = "system_resources"
+	maxOutputBytes         = 4096
+	windowsOS              = "windows"
+	toolExecTimeout        = 30 * time.Second
+	toolListDirectory      = "list_directory"
+	toolReadFile           = "read_file"
+	toolCommandHelp        = "command_help"
+	toolListMemories       = "list_memories"
+	toolListProcesses      = "list_processes"
+	toolSystemResources    = "system_resources"
 	toolNetworkConnections = "network_connections"
-	toolPing             = "ping"
-	toolCheckCommand     = "check_command"
-	toolDiskUsage        = "disk_usage"
-	argPath              = "path"
-	argCommand           = "command"
-	argHost              = "host"
+	toolPing               = "ping"
+	toolCheckCommand       = "check_command"
+	toolDiskUsage          = "disk_usage"
+	argPath                = "path"
+	argCommand             = "command"
+	argHost                = "host"
 )
 
 // ToolDef describes a tool the AI can request.
