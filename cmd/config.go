@@ -14,10 +14,10 @@ import (
 )
 
 const (
-	keyAlwaysConfirm   = "always_confirm"
-	keyModelParameters = "model_parameters"
-	keyParametersLight = "parameters_light"
-	keyParametersHigh  = "parameters_high"
+	keyAlwaysConfirm           = "always_confirm"
+	keyModelParameters         = "model_parameters"
+	keyParametersLight         = "parameters_light"
+	keyParametersHigh          = "parameters_high"
 	keyDebug                   = "debug"
 	keyHistoryIncludeDebug     = "history_include_debug"
 	keyHistoryAskOnError       = "history_ask_on_error"
@@ -58,18 +58,18 @@ var configKeys = []string{
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	"provider":                    {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	"provider_light":              {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	"provider_high":               {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	keyAlwaysConfirm:              {boolTrue, boolFalse},
-	"tool_calling":                {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
-	keyDebug:                      {config.DebugNone, config.DebugScreen, config.DebugFile},
-	"history_include_llm_output":  {boolTrue, boolFalse},
-	keyHistoryIncludeDebug:        {boolTrue, boolFalse},
-	keyHistoryAskOnError:          {boolTrue, boolFalse},
-	keyHistoryAutoCheckOnError:    {boolTrue, boolFalse},
-	keyDebugLogPayloads:           {boolTrue, boolFalse},
-	"upgrade_model_on_fail":       {boolTrue, boolFalse},
+	"provider":                   {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	"provider_light":             {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	"provider_high":              {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	keyAlwaysConfirm:             {boolTrue, boolFalse},
+	"tool_calling":               {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
+	keyDebug:                     {config.DebugNone, config.DebugScreen, config.DebugFile},
+	"history_include_llm_output": {boolTrue, boolFalse},
+	keyHistoryIncludeDebug:       {boolTrue, boolFalse},
+	keyHistoryAskOnError:         {boolTrue, boolFalse},
+	keyHistoryAutoCheckOnError:   {boolTrue, boolFalse},
+	keyDebugLogPayloads:          {boolTrue, boolFalse},
+	"upgrade_model_on_fail":      {boolTrue, boolFalse},
 }
 
 func init() {

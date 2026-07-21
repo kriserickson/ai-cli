@@ -8,9 +8,9 @@ import (
 )
 
 const (
-	patternDotEnv  = ".env"
-	patternIDRSA   = "id_rsa"
-	redactedValue  = "[REDACTED]"
+	patternDotEnv = ".env"
+	patternIDRSA  = "id_rsa"
+	redactedValue = "[REDACTED]"
 )
 
 // blockedPatterns lists file/directory patterns that must never be read or listed,
