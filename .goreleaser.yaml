@@ -60,6 +60,7 @@ brews:
       owner: kriserickson
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    skip: '{{ if .Env.HOMEBREW_TAP_TOKEN }}false{{ else }}true{{ end }}'
     directory: Formula
     homepage: "https://github.com/kriserickson/ai-cli"
     description: "Translate natural language into shell commands using AI"
