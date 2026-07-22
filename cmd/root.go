@@ -27,6 +27,7 @@ const (
 	subCmdSet    = "set"
 	subCmdList   = "list"
 	subCmdRemove = "remove"
+	subCmdClear  = "clear"
 	shellZsh     = "zsh"
 )
 
@@ -61,7 +62,7 @@ func init() {
 	rootCmd.Flags().Lookup(keyDebug).NoOptDefVal = config.DebugScreen
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Show detailed explanation of each command")
 	rootCmd.Flags().BoolVar(&lightFlag, "light", false, "Use the configured light model for this session")
-	rootCmd.Flags().BoolVar(&highFlag, "high", false, "Use the configured high model for this session")
+	rootCmd.Flags().BoolVar(&highFlag, config.ModelLevelHigh, false, "Use the configured high model for this session")
 	// Allow flags to be interspersed with args
 	rootCmd.Flags().SetInterspersed(true)
 }
@@ -235,7 +236,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 					}
 					fmt.Printf("History session %q removed.\n", args[1])
 					return nil
-				case "clear":
+				case subCmdClear:
 					if err := history.Clear(); err != nil {
 						return err
 					}

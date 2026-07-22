@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
@@ -14,6 +15,7 @@ import (
 const (
 	providerLabelLocal  = "Local"
 	providerLabelOpenAI = "OpenAI"
+	paramTemperature    = "temperature"
 )
 
 var (
@@ -151,7 +153,7 @@ type modelParameterValue struct {
 func modelParameterNames(provider, model string) []string {
 	lower := strings.ToLower(model)
 	if provider == config.ProviderLocal {
-		return []string{"temperature", "top_p", "top_k", "num_predict"}
+		return []string{paramTemperature, "top_p", "top_k", "num_predict"}
 	}
 
 	isReasoning := strings.Contains(lower, "gpt-5") || strings.HasPrefix(lower, "o1") ||
@@ -164,8 +166,8 @@ func modelParameterNames(provider, model string) []string {
 	if isReasoning || isClaude || isGemini {
 		names = append(names, "reasoning_effort")
 	}
-	if !isReasoning && !(isGemini && (strings.Contains(lower, "gemini-3") || strings.Contains(lower, "gemini-4"))) {
-		names = append(names, "temperature", "top_p")
+	if !isReasoning && (!isGemini || (!strings.Contains(lower, "gemini-3") && !strings.Contains(lower, "gemini-4"))) {
+		names = append(names, paramTemperature, "top_p")
 		if isClaude || isGemini {
 			names = append(names, "top_k")
 		}
@@ -182,10 +184,10 @@ func modelParameterValues(name string) []modelParameterValue {
 			modelParameterValue{label: "minimal", value: "minimal"},
 			modelParameterValue{label: "low", value: "low"},
 			modelParameterValue{label: "medium", value: "medium"},
-			modelParameterValue{label: "high", value: "high"},
+			modelParameterValue{label: config.ModelLevelHigh, value: config.ModelLevelHigh},
 			modelParameterValue{label: "xhigh", value: "xhigh"},
 		)
-	case "temperature":
+	case paramTemperature:
 		for _, value := range []float64{0, 0.2, 0.5, 0.7, 1, 1.5, 2} {
 			values = append(values, modelParameterValue{label: fmt.Sprint(value), value: value})
 		}
@@ -195,15 +197,15 @@ func modelParameterValues(name string) []modelParameterValue {
 		}
 	case "top_k":
 		for _, value := range []int{1, 10, 20, 40, 50, 100} {
-			values = append(values, modelParameterValue{label: fmt.Sprint(value), value: value})
+			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
 	case "max_tokens":
 		for _, value := range []int{512, 1024, 2048, 4096, 8192, 16384} {
-			values = append(values, modelParameterValue{label: fmt.Sprint(value), value: value})
+			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
 	case "num_predict":
 		for _, value := range []int{256, 512, 1024, 2048, 4096, 8192} {
-			values = append(values, modelParameterValue{label: fmt.Sprint(value), value: value})
+			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
 	}
 	return values
