@@ -100,9 +100,17 @@ func promptLocalBaseURL(current string) (string, error) {
 func promptModelParameters(provider, model string, current map[string]any) (map[string]any, error) {
 	fmt.Printf("Parameter help: %s\n", llm.ModelParameterHelp(provider, model))
 
+	validNames := modelParameterNames(provider, model)
+	validSet := make(map[string]bool, len(validNames))
+	for _, n := range validNames {
+		validSet[n] = true
+	}
+
 	parameters := make(map[string]any, len(current))
 	for key, value := range current {
-		parameters[key] = value
+		if validSet[key] {
+			parameters[key] = value
+		}
 	}
 
 	for {
@@ -128,7 +136,7 @@ func promptModelParameters(provider, model string, current map[string]any) (map[
 		}
 
 		name := parameterNames[idx-2]
-		values := modelParameterValues(name)
+		values := modelParameterValues(name, model)
 		valueLabels := make([]string, len(values))
 		for i, value := range values {
 			valueLabels[i] = value.label
@@ -172,14 +180,29 @@ func modelParameterNames(provider, model string) []string {
 			names = append(names, "top_k")
 		}
 	}
-	names = append(names, "max_tokens")
+	if isReasoning {
+		names = append(names, "max_completion_tokens")
+	} else {
+		names = append(names, "max_tokens")
+	}
 	return names
 }
 
-func modelParameterValues(name string) []modelParameterValue {
+func modelParameterValues(name, model string) []modelParameterValue {
 	values := []modelParameterValue{{label: "Provider default (remove parameter)"}}
 	switch name {
 	case "reasoning_effort":
+		lower := strings.ToLower(model)
+		isOSeries := strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") ||
+			strings.HasPrefix(lower, "o4") || strings.Contains(lower, "/o1") ||
+			strings.Contains(lower, "/o3") || strings.Contains(lower, "/o4")
+		if isOSeries {
+			return append(values,
+				modelParameterValue{label: "low", value: "low"},
+				modelParameterValue{label: "medium", value: "medium"},
+				modelParameterValue{label: "high", value: "high"},
+			)
+		}
 		return append(values,
 			modelParameterValue{label: "minimal", value: "minimal"},
 			modelParameterValue{label: "low", value: "low"},
@@ -199,7 +222,7 @@ func modelParameterValues(name string) []modelParameterValue {
 		for _, value := range []int{1, 10, 20, 40, 50, 100} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
-	case "max_tokens":
+	case "max_tokens", "max_completion_tokens":
 		for _, value := range []int{512, 1024, 2048, 4096, 8192, 16384} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}

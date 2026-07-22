@@ -235,6 +235,93 @@ func TestPromptModelParametersCanKeepOrClearCurrentValues(t *testing.T) {
 	}
 }
 
+func TestPromptModelParametersFiltersInvalidParamsOnFamilySwitch(t *testing.T) {
+	stubWizardHooks(t)
+	wizardAskOne = func(_ survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		*(response.(*int)) = 0 // done immediately
+		return nil
+	}
+
+	// num_predict is valid for local but not for OpenAI; it should be stripped.
+	current := map[string]any{"num_predict": 1024, "temperature": 0.5}
+	parameters, err := promptModelParameters(config.ProviderOpenAI, "gpt-4o", current)
+	if err != nil {
+		t.Fatalf("promptModelParameters() error = %v", err)
+	}
+	if _, ok := parameters["num_predict"]; ok {
+		t.Fatalf("parameters = %#v, want num_predict removed", parameters)
+	}
+	if parameters["temperature"] != 0.5 {
+		t.Fatalf("parameters = %#v, want temperature=0.5 retained", parameters)
+	}
+}
+
+func TestModelParameterNamesUsesMaxCompletionTokensForReasoningModels(t *testing.T) {
+	tests := []struct {
+		model    string
+		wantKey  string
+	}{
+		{"o1", "max_completion_tokens"},
+		{"o3-mini", "max_completion_tokens"},
+		{"o4-preview", "max_completion_tokens"},
+		{"gpt-5.4", "max_completion_tokens"},
+		{"openai/o1", "max_completion_tokens"},
+		{"gpt-4o", "max_tokens"},
+		{"gpt-4.1", "max_tokens"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.model, func(t *testing.T) {
+			names := modelParameterNames(config.ProviderOpenAI, tt.model)
+			found := false
+			for _, n := range names {
+				if n == tt.wantKey {
+					found = true
+				}
+				if n == "max_tokens" && tt.wantKey == "max_completion_tokens" {
+					t.Fatalf("modelParameterNames(%q) contains max_tokens, want max_completion_tokens", tt.model)
+				}
+				if n == "max_completion_tokens" && tt.wantKey == "max_tokens" {
+					t.Fatalf("modelParameterNames(%q) contains max_completion_tokens, want max_tokens", tt.model)
+				}
+			}
+			if !found {
+				t.Fatalf("modelParameterNames(%q) = %v, missing %q", tt.model, names, tt.wantKey)
+			}
+		})
+	}
+}
+
+func TestModelParameterValuesReasoningEffortByModelFamily(t *testing.T) {
+	t.Run("o-series has no minimal or xhigh", func(t *testing.T) {
+		for _, model := range []string{"o1", "o1-mini", "o3", "o3-mini", "o4-preview", "openai/o1"} {
+			values := modelParameterValues("reasoning_effort", model)
+			for _, v := range values {
+				if v.value == "minimal" || v.value == "xhigh" {
+					t.Fatalf("modelParameterValues(reasoning_effort, %q) includes %q, want o-series restricted list", model, v.value)
+				}
+			}
+		}
+	})
+
+	t.Run("gpt-5 includes minimal and xhigh", func(t *testing.T) {
+		values := modelParameterValues("reasoning_effort", "gpt-5.4")
+		hasMinimal, hasXhigh := false, false
+		for _, v := range values {
+			if v.value == "minimal" {
+				hasMinimal = true
+			}
+			if v.value == "xhigh" {
+				hasXhigh = true
+			}
+		}
+		if !hasMinimal || !hasXhigh {
+			t.Fatalf("modelParameterValues(reasoning_effort, gpt-5.4) missing minimal=%v xhigh=%v", hasMinimal, hasXhigh)
+		}
+	})
+}
+
+
 func TestEnsureAPIKey_MissingKeyPromptsAndSets(t *testing.T) {
 	tests := []struct {
 		name     string
