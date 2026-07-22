@@ -20,6 +20,8 @@ import (
 
 const maxCapturedOutputBytes = 32 * 1024
 
+const riskRisky = "risky"
+
 var (
 	cmdColor  = color.New(color.FgCyan, color.Bold)
 	descColor = color.New(color.FgWhite)
@@ -83,7 +85,7 @@ func RunWithResults(commands []llm.Command, cfg *config.Config, shellInfo shell.
 		cmdColor.Printf("  $ %s", command.Command)
 
 		fmt.Print("  ")
-		if command.Risk == "risky" {
+		if command.Risk == riskRisky {
 			riskColor.Printf("[risky]")
 		} else {
 			safeColor.Printf("[safe]")

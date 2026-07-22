@@ -11,7 +11,10 @@ import (
 	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
-const providerLabelLocal = "Local"
+const (
+	providerLabelLocal  = "Local"
+	providerLabelOpenAI = "OpenAI"
+)
 
 var (
 	wizardAskOne            = survey.AskOne

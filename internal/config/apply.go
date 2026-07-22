@@ -7,12 +7,13 @@ import (
 )
 
 const (
-	keyLLMKey           = "llm_key"
-	keyIncludeLLMOutput = "include_llm_output"
-	keyIncludeDebug     = "include_debug"
-	keyAskOnError       = "ask_on_error"
-	keyAutoCheckOnError = "auto_check_on_error"
-	keyRetryMaxAttempts = "retry_max_attempts"
+	keyLLMKey            = "llm_key"
+	keyIncludeLLMOutput  = "include_llm_output"
+	keyIncludeDebug      = "include_debug"
+	keyAskOnError        = "ask_on_error"
+	keyAutoCheckOnError  = "auto_check_on_error"
+	keyRetryMaxAttempts  = "retry_max_attempts"
+	keyRetryContextDepth = "retry_context_depth"
 )
 
 // ApplyAction applies an LLM-initiated config change and saves the result.
@@ -104,7 +105,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 				return errors.New("history.retry_max_attempts must be 0 or greater")
 			}
 			cfg.History.RetryMaxAttempts = n
-		case "retry_context_depth":
+		case keyRetryContextDepth:
 			n, err := strconv.Atoi(value)
 			if err != nil {
 				return fmt.Errorf("history.retry_context_depth must be a number: %w", err)

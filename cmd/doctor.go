@@ -120,7 +120,7 @@ func checkNoglobAlias() bool {
 	}
 
 	base := filepath.Base(shellEnv)
-	if base != "zsh" {
+	if base != shellZsh {
 		return true
 	}
 

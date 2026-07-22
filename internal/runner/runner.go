@@ -21,6 +21,12 @@ import (
 
 var runnerStdinIsTTY = stdinIsTTY
 
+const (
+	responseTypeCommands    = "commands"
+	responseTypeConfig      = "config"
+	responseTypeExplanation = "explanation"
+)
+
 type Interface interface {
 	RunInstruction(instruction string) error
 	RetryLastFailed(depth int) error
@@ -179,7 +185,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 	}
 
 	switch resp.Type {
-	case "commands":
+	case responseTypeCommands:
 		runResult, runErr := executor.RunWithResults(resp.Commands, r.cfg, r.shellInfo, r.explain)
 		if runResult != nil {
 			session.RecordExecutions(attempt, runResult.Commands)
@@ -201,7 +207,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 
 		r.lastFailed = session
 		return runErr
-	case "config":
+	case responseTypeConfig:
 		if err := applyConfig(resp, r.cfg); err != nil {
 			session.MarkStatus("failed")
 			r.lastFailed = session
@@ -213,7 +219,7 @@ func (r *Runner) runSession(session *history.Session, systemPrompt string, messa
 		r.saveSession(session)
 		r.updateConversationHistory(userMessage, resp, kind)
 		return nil
-	case "explanation":
+	case responseTypeExplanation:
 		// Print the explanation as primary output (not faint) since it is the complete response.
 		fmt.Println(resp.Explanation)
 		session.MarkStatus("completed")

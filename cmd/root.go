@@ -20,8 +20,14 @@ import (
 )
 
 const (
-	windows    = "windows"
-	commandAdd = "add"
+	windows      = "windows"
+	commandAdd   = "add"
+	subCmdGet    = "get"
+	subCmdShow   = "show"
+	subCmdSet    = "set"
+	subCmdList   = "list"
+	subCmdRemove = "remove"
+	shellZsh     = "zsh"
 )
 
 var (
@@ -48,11 +54,11 @@ var rootCmd = &cobra.Command{
 }
 
 func init() {
-	rootCmd.Flags().StringVar(&debugFlag, "debug", "", "Debug mode: screen (default) or file (overrides config)")
+	rootCmd.Flags().StringVar(&debugFlag, keyDebug, "", "Debug mode: screen (default) or file (overrides config)")
 	rootCmd.Flags().BoolVar(&retryOnErrorFlag, "retry-on-error", false, "Automatically send failed commands back to the AI for retry (uses history.retry_max_attempts for attempt limit)")
 	rootCmd.Flags().IntVar(&retryDepthFlag, "retry-depth", 0, "Override how many recent command results are included in AI retry context")
 	// When --debug is given without a value, default to config.DebugScreen
-	rootCmd.Flags().Lookup("debug").NoOptDefVal = config.DebugScreen
+	rootCmd.Flags().Lookup(keyDebug).NoOptDefVal = config.DebugScreen
 	rootCmd.Flags().BoolVar(&explainFlag, "explain", false, "Show detailed explanation of each command")
 	rootCmd.Flags().BoolVar(&lightFlag, "light", false, "Use the configured light model for this session")
 	rootCmd.Flags().BoolVar(&highFlag, "high", false, "Use the configured high model for this session")
@@ -147,13 +153,13 @@ func runRoot(_ *cobra.Command, args []string) error {
 					return err
 				}
 				switch args[0] {
-				case "show":
+				case subCmdShow:
 					data, err := toml.Marshal(config.RedactedCopy(cfg))
 					if err != nil {
 						return err
 					}
 					fmt.Print(string(data))
-				case "get":
+				case subCmdGet:
 					if len(args) < 2 {
 						return errors.New("config get requires a key argument")
 					}
@@ -162,7 +168,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 						return err
 					}
 					fmt.Println(val)
-				case "set":
+				case subCmdSet:
 					if len(args) < 3 {
 						return errors.New("config set requires key and value arguments")
 					}
@@ -183,7 +189,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 					return listMemories()
 				}
 				switch args[0] {
-				case "list":
+				case subCmdList:
 					return listMemories()
 				case commandAdd:
 					if len(args) < 3 {
@@ -195,7 +201,7 @@ func runRoot(_ *cobra.Command, args []string) error {
 						return err
 					}
 					fmt.Printf("Memory %q added.\n", keyword)
-				case "remove":
+				case subCmdRemove:
 					if len(args) < 2 {
 						return errors.New("usage: memory remove <keyword>")
 					}
@@ -213,14 +219,14 @@ func runRoot(_ *cobra.Command, args []string) error {
 					return listHistory(historyVerbose, historyCount)
 				}
 				switch args[0] {
-				case "list":
+				case subCmdList:
 					return listHistory(historyVerbose, historyCount)
-				case "show":
+				case subCmdShow:
 					if len(args) < 2 {
 						return errors.New("history show requires an id argument")
 					}
 					return showHistory(args[1])
-				case "remove":
+				case subCmdRemove:
 					if len(args) < 2 {
 						return errors.New("history remove requires an id argument")
 					}
