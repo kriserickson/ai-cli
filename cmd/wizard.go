@@ -18,6 +18,7 @@ const (
 	providerLabelOpenRouter = "OpenRouter"
 
 	paramMaxCompletionTokens = "max_completion_tokens"
+	paramMaxTokens           = "max_tokens"
 	paramNumPredict          = "num_predict"
 	paramTemperature         = "temperature"
 
@@ -193,7 +194,7 @@ func modelParameterNames(provider, model string) []string {
 	if isReasoning {
 		names = append(names, paramMaxCompletionTokens)
 	} else {
-		names = append(names, "max_tokens")
+		names = append(names, paramMaxTokens)
 	}
 	return names
 }
@@ -232,7 +233,7 @@ func modelParameterValues(name, model string) []modelParameterValue {
 		for _, value := range []int{1, 10, 20, 40, 50, 100} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
-	case "max_tokens", paramMaxCompletionTokens:
+	case paramMaxTokens, paramMaxCompletionTokens:
 		for _, value := range []int{512, 1024, 2048, 4096, 8192, 16384} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}

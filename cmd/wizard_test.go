@@ -266,8 +266,8 @@ func TestModelParameterNamesUsesMaxCompletionTokensForReasoningModels(t *testing
 		{"o4-preview", paramMaxCompletionTokens},
 		{"gpt-5.4", paramMaxCompletionTokens},
 		{"openai/o1", paramMaxCompletionTokens},
-		{"gpt-4o", "max_tokens"},
-		{"gpt-4.1", "max_tokens"},
+		{"gpt-4o", paramMaxTokens},
+		{"gpt-4.1", paramMaxTokens},
 	}
 
 	for _, tt := range tests {
@@ -278,10 +278,10 @@ func TestModelParameterNamesUsesMaxCompletionTokensForReasoningModels(t *testing
 				if n == tt.wantKey {
 					found = true
 				}
-				if n == "max_tokens" && tt.wantKey == paramMaxCompletionTokens {
+				if n == paramMaxTokens && tt.wantKey == paramMaxCompletionTokens {
 					t.Fatalf("modelParameterNames(%q) contains max_tokens, want max_completion_tokens", tt.model)
 				}
-				if n == paramMaxCompletionTokens && tt.wantKey == "max_tokens" {
+				if n == paramMaxCompletionTokens && tt.wantKey == paramMaxTokens {
 					t.Fatalf("modelParameterNames(%q) contains max_completion_tokens, want max_tokens", tt.model)
 				}
 			}
