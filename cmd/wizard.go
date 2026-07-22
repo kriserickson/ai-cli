@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 
@@ -12,8 +13,20 @@ import (
 )
 
 const (
-	providerLabelLocal  = "Local"
-	providerLabelOpenAI = "OpenAI"
+	providerLabelLocal      = "Local"
+	providerLabelOpenAI     = "OpenAI"
+	providerLabelOpenRouter = "OpenRouter"
+
+	paramMaxCompletionTokens = "max_completion_tokens"
+	paramMaxTokens           = "max_tokens"
+	paramNumPredict          = "num_predict"
+	paramTemperature         = "temperature"
+
+	reasoningEffortHigh    = "high"
+	reasoningEffortLow     = "low"
+	reasoningEffortMedium  = "medium"
+	reasoningEffortMinimal = "minimal"
+	reasoningEffortXHigh   = "xhigh"
 )
 
 var (
@@ -40,8 +53,25 @@ func selectFromList(prompt string, options []string) (int, error) {
 	return idx, nil
 }
 
-func pickProvider() (string, error) {
-	idx, err := selectFromList("Select a provider:", []string{providerLabelOpenAI, "OpenRouter", providerLabelLocal})
+func pickProvider(current string) (string, error) {
+	options := []string{providerLabelOpenAI, providerLabelOpenRouter, providerLabelLocal}
+	defaultProvider := ""
+	switch current {
+	case config.ProviderOpenAI:
+		defaultProvider = options[0]
+	case config.ProviderOpenRouter:
+		defaultProvider = options[1]
+	case config.ProviderLocal:
+		defaultProvider = options[2]
+	}
+
+	var idx int
+	err := wizardAskOne(&survey.Select{
+		Message:  "Select a provider:",
+		Options:  options,
+		Default:  defaultProvider,
+		PageSize: 16,
+	}, &idx, survey.WithValidator(survey.Required))
 	if err != nil {
 		return "", err
 	}
@@ -80,23 +110,154 @@ func promptLocalBaseURL(current string) (string, error) {
 
 func promptModelParameters(provider, model string, current map[string]any) (map[string]any, error) {
 	fmt.Printf("Parameter help: %s\n", llm.ModelParameterHelp(provider, model))
-	defaultValue := ""
-	if len(current) > 0 {
-		data, err := json.Marshal(current)
-		if err != nil {
-			return nil, fmt.Errorf("format current model parameters: %w", err)
+
+	validNames := modelParameterNames(provider, model)
+	validSet := make(map[string]bool, len(validNames))
+	for _, n := range validNames {
+		validSet[n] = true
+	}
+
+	parameters := make(map[string]any, len(current))
+	for key, value := range current {
+		if validSet[key] {
+			parameters[key] = value
 		}
-		defaultValue = string(data)
 	}
-	var value string
-	err := wizardAskOne(&survey.Input{
-		Message: "Model parameters as JSON (blank for provider defaults):",
-		Default: defaultValue,
-	}, &value)
-	if err != nil {
-		return nil, err
+
+	for {
+		parameterNames := modelParameterNames(provider, model)
+		options := []string{"Done", "Use provider defaults (clear all)"}
+		for _, name := range parameterNames {
+			label := strings.ReplaceAll(name, "_", " ")
+			if value, ok := parameters[name]; ok {
+				label += fmt.Sprintf(" (current: %v)", value)
+			}
+			options = append(options, label)
+		}
+
+		idx, err := selectFromList("Choose a model parameter:", options)
+		if err != nil {
+			return nil, err
+		}
+		switch idx {
+		case 0:
+			return parameters, nil
+		case 1:
+			return map[string]any{}, nil
+		}
+
+		name := parameterNames[idx-2]
+		values := modelParameterValues(name, model)
+		valueLabels := make([]string, len(values))
+		for i, value := range values {
+			valueLabels[i] = value.label
+		}
+		valueIdx, err := selectFromList(fmt.Sprintf("Select %s:", strings.ReplaceAll(name, "_", " ")), valueLabels)
+		if err != nil {
+			return nil, err
+		}
+		if valueIdx == 0 {
+			delete(parameters, name)
+		} else {
+			parameters[name] = values[valueIdx].value
+		}
 	}
-	return config.ParseModelParameters(value)
+}
+
+type modelParameterValue struct {
+	label string
+	value any
+}
+
+func modelParameterNames(provider, model string) []string {
+	lower := strings.ToLower(model)
+	if provider == config.ProviderLocal {
+		return []string{paramTemperature, "top_p", "top_k", paramNumPredict}
+	}
+
+	isReasoning := strings.Contains(lower, "gpt-5") || strings.HasPrefix(lower, "o1") ||
+		strings.HasPrefix(lower, "o3") || strings.HasPrefix(lower, "o4") ||
+		strings.Contains(lower, "/o1") || strings.Contains(lower, "/o3") || strings.Contains(lower, "/o4")
+	isClaude := strings.Contains(lower, "anthropic/") || strings.Contains(lower, "claude")
+	isGemini := strings.Contains(lower, "google/") || strings.Contains(lower, "gemini")
+
+	var names []string
+	if isReasoning || isClaude || isGemini {
+		names = append(names, "reasoning_effort")
+	}
+	if !isReasoning && (!isGemini || (!strings.Contains(lower, "gemini-3") && !strings.Contains(lower, "gemini-4"))) {
+		names = append(names, paramTemperature, "top_p")
+		if isClaude || isGemini {
+			names = append(names, "top_k")
+		}
+	}
+	if isReasoning {
+		names = append(names, paramMaxCompletionTokens)
+	} else {
+		names = append(names, paramMaxTokens)
+	}
+	return names
+}
+
+func modelParameterValues(name, model string) []modelParameterValue {
+	values := []modelParameterValue{{label: "Provider default (remove parameter)"}}
+	switch name {
+	case "reasoning_effort":
+		lower := strings.ToLower(model)
+		isOSeries := strings.HasPrefix(lower, "o1") || strings.HasPrefix(lower, "o3") ||
+			strings.HasPrefix(lower, "o4") || strings.Contains(lower, "/o1") ||
+			strings.Contains(lower, "/o3") || strings.Contains(lower, "/o4")
+		if isOSeries {
+			return append(values,
+				modelParameterValue{label: reasoningEffortLow, value: reasoningEffortLow},
+				modelParameterValue{label: reasoningEffortMedium, value: reasoningEffortMedium},
+				modelParameterValue{label: reasoningEffortHigh, value: reasoningEffortHigh},
+			)
+		}
+		return append(values,
+			modelParameterValue{label: reasoningEffortMinimal, value: reasoningEffortMinimal},
+			modelParameterValue{label: reasoningEffortLow, value: reasoningEffortLow},
+			modelParameterValue{label: reasoningEffortMedium, value: reasoningEffortMedium},
+			modelParameterValue{label: config.ModelLevelHigh, value: config.ModelLevelHigh},
+			modelParameterValue{label: reasoningEffortXHigh, value: reasoningEffortXHigh},
+		)
+	case paramTemperature:
+		for _, value := range []float64{0, 0.2, 0.5, 0.7, 1, 1.5, 2} {
+			values = append(values, modelParameterValue{label: fmt.Sprint(value), value: value})
+		}
+	case "top_p":
+		for _, value := range []float64{0.1, 0.5, 0.8, 0.9, 0.95, 1} {
+			values = append(values, modelParameterValue{label: fmt.Sprint(value), value: value})
+		}
+	case "top_k":
+		for _, value := range []int{1, 10, 20, 40, 50, 100} {
+			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
+		}
+	case paramMaxTokens, paramMaxCompletionTokens:
+		for _, value := range []int{512, 1024, 2048, 4096, 8192, 16384} {
+			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
+		}
+	case paramNumPredict:
+		for _, value := range []int{256, 512, 1024, 2048, 4096, 8192} {
+			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
+		}
+	}
+	return values
+}
+
+func configuredProviderForLevel(cfg *config.Config, level string) string {
+	provider := cfg.Provider.Default
+	switch level {
+	case config.ModelLevelLight:
+		if cfg.Provider.ProviderLight != "" {
+			provider = cfg.Provider.ProviderLight
+		}
+	case config.ModelLevelHigh:
+		if cfg.Provider.ProviderHigh != "" {
+			provider = cfg.Provider.ProviderHigh
+		}
+	}
+	return provider
 }
 
 func ensureAPIKey(cfg *config.Config, provider string) error {
@@ -218,7 +379,7 @@ func RunModelWizardForLevel(cfg *config.Config, level string) error {
 		return fmt.Errorf("invalid model level %q: must be light, default, or high", level)
 	}
 	fmt.Printf("Configuring %s model level.\n", level)
-	provider, err := pickProvider()
+	provider, err := pickProvider(configuredProviderForLevel(cfg, level))
 	if err != nil {
 		return err
 	}

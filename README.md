@@ -414,7 +414,7 @@ ai set-model default
 ai set-model high
 ```
 
-The wizard selects a provider and model, displays parameter guidance for OpenAI, Anthropic, Google, or local model families, and accepts a JSON object of model parameters. You can also set parameters directly:
+The wizard selects a provider and model, then lets you choose common model parameters and values with the arrow keys and Enter. It displays guidance tailored to OpenAI, Anthropic, Google, or local model families. For advanced parameters, you can still set a JSON object directly:
 
 ```sh
 ai config set parameters_light '{"temperature":0.2}'

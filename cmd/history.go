@@ -59,7 +59,7 @@ func init() {
 		},
 	}
 	clearCmd := &cobra.Command{
-		Use:   "clear",
+		Use:   subCmdClear,
 		Short: "Remove all saved AI sessions",
 		Args:  cobra.NoArgs,
 		RunE: func(_ *cobra.Command, _ []string) error {
