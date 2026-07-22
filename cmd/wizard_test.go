@@ -97,7 +97,7 @@ func TestPickProvider(t *testing.T) {
 				return nil
 			}
 
-			got, err := pickProvider()
+			got, err := pickProvider("")
 			if tt.wantErr {
 				if err == nil {
 					t.Fatal("pickProvider() error = nil, want error")
@@ -111,6 +111,29 @@ func TestPickProvider(t *testing.T) {
 				t.Fatalf("pickProvider() = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPickProviderDefaultsToConfiguredProvider(t *testing.T) {
+	stubWizardHooks(t)
+	wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		selectPrompt, ok := p.(*survey.Select)
+		if !ok {
+			t.Fatalf("prompt type = %T, want *survey.Select", p)
+		}
+		if selectPrompt.Default != "OpenRouter" {
+			t.Fatalf("provider default = %v, want OpenRouter", selectPrompt.Default)
+		}
+		*(response.(*int)) = 1
+		return nil
+	}
+
+	provider, err := pickProvider(config.ProviderOpenRouter)
+	if err != nil {
+		t.Fatalf("pickProvider() error = %v", err)
+	}
+	if provider != config.ProviderOpenRouter {
+		t.Fatalf("pickProvider() = %q, want %q", provider, config.ProviderOpenRouter)
 	}
 }
 
@@ -148,6 +171,68 @@ func TestPromptAPIKey(t *testing.T) {
 			t.Fatalf("promptAPIKey() error = %q, want prompt error", err.Error())
 		}
 	})
+}
+
+func TestPromptModelParametersUsesSelectMenus(t *testing.T) {
+	stubWizardHooks(t)
+	call := 0
+	wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		if _, ok := p.(*survey.Select); !ok {
+			t.Fatalf("prompt %d type = %T, want *survey.Select", call, p)
+		}
+		switch call {
+		case 0:
+			*(response.(*int)) = 2 // reasoning effort
+		case 1:
+			*(response.(*int)) = 4 // high
+		case 2:
+			*(response.(*int)) = 0 // done
+		default:
+			t.Fatalf("unexpected prompt %d", call)
+		}
+		call++
+		return nil
+	}
+
+	parameters, err := promptModelParameters(config.ProviderOpenAI, "gpt-5.4", nil)
+	if err != nil {
+		t.Fatalf("promptModelParameters() error = %v", err)
+	}
+	if parameters["reasoning_effort"] != "high" {
+		t.Fatalf("parameters = %#v, want reasoning_effort=high", parameters)
+	}
+}
+
+func TestPromptModelParametersCanKeepOrClearCurrentValues(t *testing.T) {
+	tests := []struct {
+		name    string
+		choice  int
+		wantLen int
+	}{
+		{name: "keep", choice: 0, wantLen: 1},
+		{name: "clear", choice: 1, wantLen: 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stubWizardHooks(t)
+			wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+				if _, ok := p.(*survey.Select); !ok {
+					t.Fatalf("prompt type = %T, want *survey.Select", p)
+				}
+				*(response.(*int)) = tt.choice
+				return nil
+			}
+
+			parameters, err := promptModelParameters(config.ProviderOpenAI, "gpt-4o", map[string]any{"temperature": 0.2})
+			if err != nil {
+				t.Fatalf("promptModelParameters() error = %v", err)
+			}
+			if len(parameters) != tt.wantLen {
+				t.Fatalf("parameters = %#v, want length %d", parameters, tt.wantLen)
+			}
+		})
+	}
 }
 
 func TestEnsureAPIKey_MissingKeyPromptsAndSets(t *testing.T) {
@@ -365,7 +450,7 @@ func TestRunModelWizard(t *testing.T) {
 			case 1: // model
 				*(response.(*int)) = 0
 			case 2: // parameters
-				*(response.(*string)) = ""
+				*(response.(*int)) = 0 // done; use provider defaults
 			default:
 				t.Fatalf("unexpected extra prompt call %d", call)
 			}
@@ -522,7 +607,7 @@ func TestRunModelWizard(t *testing.T) {
 			case 2: // model
 				*(response.(*int)) = 0
 			case 3: // parameters
-				*(response.(*string)) = ""
+				*(response.(*int)) = 0 // done; use provider defaults
 			default:
 				t.Fatalf("unexpected prompt call %d", call)
 			}
@@ -591,7 +676,7 @@ func TestRunModelWizard(t *testing.T) {
 			case 1:
 				*(response.(*int)) = 0 // model
 			case 2:
-				*(response.(*string)) = "" // parameters
+				*(response.(*int)) = 0 // parameters: done
 			default:
 				t.Fatalf("unexpected prompt call %d", call)
 			}
@@ -627,7 +712,11 @@ func TestRunModelWizardForLevelHighWithParameters(t *testing.T) {
 		case 1:
 			*(response.(*int)) = 0 // first model
 		case 2:
-			*(response.(*string)) = `{"reasoning_effort":"high"}`
+			*(response.(*int)) = 2 // reasoning effort
+		case 3:
+			*(response.(*int)) = 4 // high
+		case 4:
+			*(response.(*int)) = 0 // done
 		default:
 			t.Fatalf("unexpected prompt %d", call)
 		}
@@ -651,5 +740,55 @@ func TestRunModelWizardForLevelHighWithParameters(t *testing.T) {
 	cfg.Provider.OpenAI.APIKey = "sk-existing"
 	if err := RunModelWizardForLevel(cfg, config.ModelLevelHigh); err != nil {
 		t.Fatalf("RunModelWizardForLevel: %v", err)
+	}
+}
+
+func TestRunModelWizardForLevelReusesInheritedProviderKey(t *testing.T) {
+	stubWizardHooks(t)
+	call := 0
+	wizardAskOne = func(p survey.Prompt, response interface{}, _ ...survey.AskOpt) error {
+		if _, ok := p.(*survey.Password); ok {
+			t.Fatal("API key was prompted even though the inherited provider already has one")
+		}
+		switch call {
+		case 0:
+			providerPrompt, ok := p.(*survey.Select)
+			if !ok {
+				t.Fatalf("provider prompt type = %T, want *survey.Select", p)
+			}
+			if providerPrompt.Default != "OpenRouter" {
+				t.Fatalf("provider default = %v, want OpenRouter", providerPrompt.Default)
+			}
+			*(response.(*int)) = 1 // inherited OpenRouter provider
+		case 1:
+			*(response.(*int)) = 0 // company
+		case 2:
+			*(response.(*int)) = 0 // model
+		case 3:
+			*(response.(*int)) = 0 // parameters: done
+		default:
+			t.Fatalf("unexpected prompt %d", call)
+		}
+		call++
+		return nil
+	}
+	wizardFetchORModels = func(_ string, key string) ([]llm.ModelInfo, error) {
+		if key != "sk-existing" {
+			t.Fatalf("model fetch key = %q, want existing key", key)
+		}
+		return []llm.ModelInfo{{ID: "anthropic/claude-3.5-haiku", Name: "Claude 3.5 Haiku", Company: "Anthropic"}}, nil
+	}
+	wizardSaveConfig = func(cfg *config.Config) error {
+		if cfg.Provider.ProviderLight != config.ProviderOpenRouter {
+			t.Fatalf("light provider = %q, want OpenRouter", cfg.Provider.ProviderLight)
+		}
+		return nil
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.Provider.Default = config.ProviderOpenRouter
+	cfg.Provider.OpenRouter.APIKey = "sk-existing"
+	if err := RunModelWizardForLevel(cfg, config.ModelLevelLight); err != nil {
+		t.Fatalf("RunModelWizardForLevel() error = %v", err)
 	}
 }

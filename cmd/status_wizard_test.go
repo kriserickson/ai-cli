@@ -427,7 +427,7 @@ func TestPickProvider_Local(t *testing.T) {
 		return nil
 	}
 
-	got, err := pickProvider()
+	got, err := pickProvider("")
 	if err != nil {
 		t.Fatalf("pickProvider() error = %v", err)
 	}
