@@ -41,7 +41,7 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider(current string) (string, error) {
-	options := []string{"OpenAI", "OpenRouter", providerLabelLocal}
+	options := []string{providerLabelOpenAI, "OpenRouter", providerLabelLocal}
 	defaultProvider := ""
 	switch current {
 	case config.ProviderOpenAI:
