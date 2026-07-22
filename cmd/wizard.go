@@ -13,9 +13,19 @@ import (
 )
 
 const (
-	providerLabelLocal  = "Local"
-	providerLabelOpenAI = "OpenAI"
-	paramTemperature    = "temperature"
+	providerLabelLocal      = "Local"
+	providerLabelOpenAI     = "OpenAI"
+	providerLabelOpenRouter = "OpenRouter"
+
+	paramMaxCompletionTokens = "max_completion_tokens"
+	paramNumPredict          = "num_predict"
+	paramTemperature         = "temperature"
+
+	reasoningEffortHigh    = "high"
+	reasoningEffortLow     = "low"
+	reasoningEffortMedium  = "medium"
+	reasoningEffortMinimal = "minimal"
+	reasoningEffortXHigh   = "xhigh"
 )
 
 var (
@@ -43,7 +53,7 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider(current string) (string, error) {
-	options := []string{providerLabelOpenAI, "OpenRouter", providerLabelLocal}
+	options := []string{providerLabelOpenAI, providerLabelOpenRouter, providerLabelLocal}
 	defaultProvider := ""
 	switch current {
 	case config.ProviderOpenAI:
@@ -161,7 +171,7 @@ type modelParameterValue struct {
 func modelParameterNames(provider, model string) []string {
 	lower := strings.ToLower(model)
 	if provider == config.ProviderLocal {
-		return []string{paramTemperature, "top_p", "top_k", "num_predict"}
+		return []string{paramTemperature, "top_p", "top_k", paramNumPredict}
 	}
 
 	isReasoning := strings.Contains(lower, "gpt-5") || strings.HasPrefix(lower, "o1") ||
@@ -181,7 +191,7 @@ func modelParameterNames(provider, model string) []string {
 		}
 	}
 	if isReasoning {
-		names = append(names, "max_completion_tokens")
+		names = append(names, paramMaxCompletionTokens)
 	} else {
 		names = append(names, "max_tokens")
 	}
@@ -198,17 +208,17 @@ func modelParameterValues(name, model string) []modelParameterValue {
 			strings.Contains(lower, "/o3") || strings.Contains(lower, "/o4")
 		if isOSeries {
 			return append(values,
-				modelParameterValue{label: "low", value: "low"},
-				modelParameterValue{label: "medium", value: "medium"},
-				modelParameterValue{label: "high", value: "high"},
+				modelParameterValue{label: reasoningEffortLow, value: reasoningEffortLow},
+				modelParameterValue{label: reasoningEffortMedium, value: reasoningEffortMedium},
+				modelParameterValue{label: reasoningEffortHigh, value: reasoningEffortHigh},
 			)
 		}
 		return append(values,
-			modelParameterValue{label: "minimal", value: "minimal"},
-			modelParameterValue{label: "low", value: "low"},
-			modelParameterValue{label: "medium", value: "medium"},
+			modelParameterValue{label: reasoningEffortMinimal, value: reasoningEffortMinimal},
+			modelParameterValue{label: reasoningEffortLow, value: reasoningEffortLow},
+			modelParameterValue{label: reasoningEffortMedium, value: reasoningEffortMedium},
 			modelParameterValue{label: config.ModelLevelHigh, value: config.ModelLevelHigh},
-			modelParameterValue{label: "xhigh", value: "xhigh"},
+			modelParameterValue{label: reasoningEffortXHigh, value: reasoningEffortXHigh},
 		)
 	case paramTemperature:
 		for _, value := range []float64{0, 0.2, 0.5, 0.7, 1, 1.5, 2} {
@@ -222,11 +232,11 @@ func modelParameterValues(name, model string) []modelParameterValue {
 		for _, value := range []int{1, 10, 20, 40, 50, 100} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
-	case "max_tokens", "max_completion_tokens":
+	case "max_tokens", paramMaxCompletionTokens:
 		for _, value := range []int{512, 1024, 2048, 4096, 8192, 16384} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}
-	case "num_predict":
+	case paramNumPredict:
 		for _, value := range []int{256, 512, 1024, 2048, 4096, 8192} {
 			values = append(values, modelParameterValue{label: strconv.Itoa(value), value: value})
 		}

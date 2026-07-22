@@ -20,7 +20,7 @@ func TestRunRootSingleShot_ModelLevelFlags(t *testing.T) {
 		wantModel string
 	}{
 		{"light", true, false, "gpt-light"},
-		{"high", false, true, "gpt-high"},
+		{config.ModelLevelHigh, false, true, "gpt-high"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var gotModel string

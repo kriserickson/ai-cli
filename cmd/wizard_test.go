@@ -121,7 +121,7 @@ func TestPickProviderDefaultsToConfiguredProvider(t *testing.T) {
 		if !ok {
 			t.Fatalf("prompt type = %T, want *survey.Select", p)
 		}
-		if selectPrompt.Default != "OpenRouter" {
+		if selectPrompt.Default != providerLabelOpenRouter {
 			t.Fatalf("provider default = %v, want OpenRouter", selectPrompt.Default)
 		}
 		*(response.(*int)) = 1
@@ -198,7 +198,7 @@ func TestPromptModelParametersUsesSelectMenus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("promptModelParameters() error = %v", err)
 	}
-	if parameters["reasoning_effort"] != "high" {
+	if parameters["reasoning_effort"] != reasoningEffortHigh {
 		t.Fatalf("parameters = %#v, want reasoning_effort=high", parameters)
 	}
 }
@@ -243,12 +243,12 @@ func TestPromptModelParametersFiltersInvalidParamsOnFamilySwitch(t *testing.T) {
 	}
 
 	// num_predict is valid for local but not for OpenAI; it should be stripped.
-	current := map[string]any{"num_predict": 1024, "temperature": 0.5}
+	current := map[string]any{paramNumPredict: 1024, paramTemperature: 0.5}
 	parameters, err := promptModelParameters(config.ProviderOpenAI, "gpt-4o", current)
 	if err != nil {
 		t.Fatalf("promptModelParameters() error = %v", err)
 	}
-	if _, ok := parameters["num_predict"]; ok {
+	if _, ok := parameters[paramNumPredict]; ok {
 		t.Fatalf("parameters = %#v, want num_predict removed", parameters)
 	}
 	if parameters["temperature"] != 0.5 {
@@ -258,14 +258,14 @@ func TestPromptModelParametersFiltersInvalidParamsOnFamilySwitch(t *testing.T) {
 
 func TestModelParameterNamesUsesMaxCompletionTokensForReasoningModels(t *testing.T) {
 	tests := []struct {
-		model    string
-		wantKey  string
+		model   string
+		wantKey string
 	}{
-		{"o1", "max_completion_tokens"},
-		{"o3-mini", "max_completion_tokens"},
-		{"o4-preview", "max_completion_tokens"},
-		{"gpt-5.4", "max_completion_tokens"},
-		{"openai/o1", "max_completion_tokens"},
+		{"o1", paramMaxCompletionTokens},
+		{"o3-mini", paramMaxCompletionTokens},
+		{"o4-preview", paramMaxCompletionTokens},
+		{"gpt-5.4", paramMaxCompletionTokens},
+		{"openai/o1", paramMaxCompletionTokens},
 		{"gpt-4o", "max_tokens"},
 		{"gpt-4.1", "max_tokens"},
 	}
@@ -278,10 +278,10 @@ func TestModelParameterNamesUsesMaxCompletionTokensForReasoningModels(t *testing
 				if n == tt.wantKey {
 					found = true
 				}
-				if n == "max_tokens" && tt.wantKey == "max_completion_tokens" {
+				if n == "max_tokens" && tt.wantKey == paramMaxCompletionTokens {
 					t.Fatalf("modelParameterNames(%q) contains max_tokens, want max_completion_tokens", tt.model)
 				}
-				if n == "max_completion_tokens" && tt.wantKey == "max_tokens" {
+				if n == paramMaxCompletionTokens && tt.wantKey == "max_tokens" {
 					t.Fatalf("modelParameterNames(%q) contains max_completion_tokens, want max_tokens", tt.model)
 				}
 			}
@@ -297,7 +297,7 @@ func TestModelParameterValuesReasoningEffortByModelFamily(t *testing.T) {
 		for _, model := range []string{"o1", "o1-mini", "o3", "o3-mini", "o4-preview", "openai/o1"} {
 			values := modelParameterValues("reasoning_effort", model)
 			for _, v := range values {
-				if v.value == "minimal" || v.value == "xhigh" {
+				if v.value == reasoningEffortMinimal || v.value == reasoningEffortXHigh {
 					t.Fatalf("modelParameterValues(reasoning_effort, %q) includes %q, want o-series restricted list", model, v.value)
 				}
 			}
@@ -308,10 +308,10 @@ func TestModelParameterValuesReasoningEffortByModelFamily(t *testing.T) {
 		values := modelParameterValues("reasoning_effort", "gpt-5.4")
 		hasMinimal, hasXhigh := false, false
 		for _, v := range values {
-			if v.value == "minimal" {
+			if v.value == reasoningEffortMinimal {
 				hasMinimal = true
 			}
-			if v.value == "xhigh" {
+			if v.value == reasoningEffortXHigh {
 				hasXhigh = true
 			}
 		}
@@ -320,7 +320,6 @@ func TestModelParameterValuesReasoningEffortByModelFamily(t *testing.T) {
 		}
 	})
 }
-
 
 func TestEnsureAPIKey_MissingKeyPromptsAndSets(t *testing.T) {
 	tests := []struct {
@@ -817,7 +816,7 @@ func TestRunModelWizardForLevelHighWithParameters(t *testing.T) {
 		if cfg.Provider.ProviderHigh != config.ProviderOpenAI || cfg.Provider.ModelHigh != "gpt-5.4" {
 			t.Fatalf("high selection = %#v", cfg.Provider)
 		}
-		if cfg.Provider.ParametersHigh["reasoning_effort"] != "high" {
+		if cfg.Provider.ParametersHigh["reasoning_effort"] != reasoningEffortHigh {
 			t.Fatalf("high parameters = %#v", cfg.Provider.ParametersHigh)
 		}
 		return nil
@@ -843,7 +842,7 @@ func TestRunModelWizardForLevelReusesInheritedProviderKey(t *testing.T) {
 			if !ok {
 				t.Fatalf("provider prompt type = %T, want *survey.Select", p)
 			}
-			if providerPrompt.Default != "OpenRouter" {
+			if providerPrompt.Default != providerLabelOpenRouter {
 				t.Fatalf("provider default = %v, want OpenRouter", providerPrompt.Default)
 			}
 			*(response.(*int)) = 1 // inherited OpenRouter provider
