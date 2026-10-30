@@ -27,10 +27,12 @@ func RedactedCopy(cfg *Config) *Config {
 	copyCfg.Provider.OpenAI = cfg.Provider.OpenAI
 	copyCfg.Provider.OpenRouter = cfg.Provider.OpenRouter
 	copyCfg.Provider.Local = cfg.Provider.Local
+	copyCfg.Provider.Copilot = cfg.Provider.Copilot
 
 	copyCfg.Provider.OpenAI.APIKey = RedactSecret(copyCfg.Provider.OpenAI.APIKey)
 	copyCfg.Provider.OpenRouter.APIKey = RedactSecret(copyCfg.Provider.OpenRouter.APIKey)
 	copyCfg.Provider.Local.APIKey = RedactSecret(copyCfg.Provider.Local.APIKey)
+	copyCfg.Provider.Copilot.APIKey = RedactSecret(copyCfg.Provider.Copilot.APIKey)
 
 	return &copyCfg
 }

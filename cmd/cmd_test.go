@@ -460,8 +460,8 @@ func TestConfigSetCompletion(t *testing.T) {
 	if dir != cobra.ShellCompDirectiveNoFileComp {
 		t.Errorf("directive = %v, want NoFileComp", dir)
 	}
-	if len(completions) != 3 {
-		t.Errorf("expected 3 provider completions, got %d", len(completions))
+	if len(completions) != 4 {
+		t.Errorf("expected 4 provider completions, got %d", len(completions))
 	}
 
 	// One arg "model": no fixed values

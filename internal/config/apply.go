@@ -27,7 +27,7 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 	case "set_model":
 		cfg.Provider.Model = value
 	case "set_provider":
-		if value != ProviderOpenAI && value != ProviderOpenRouter && value != ProviderLocal {
+		if !ValidProvider(value) {
 			return fmt.Errorf("invalid provider: %s", value)
 		}
 		cfg.Provider.Default = value
@@ -39,6 +39,8 @@ func ApplyAction(cfg *Config, action, key, value string) error {
 				cfg.Provider.OpenAI.APIKey = value
 			case ProviderLocal:
 				cfg.Provider.Local.APIKey = value
+			case ProviderCopilot:
+				cfg.Provider.Copilot.APIKey = value
 			default:
 				cfg.Provider.OpenRouter.APIKey = value
 			}

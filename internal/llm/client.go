@@ -161,6 +161,13 @@ func newProviderClient(cfg *config.Config, selection config.ModelSelection, debu
 	case config.ProviderOpenRouter:
 		baseURL = cfg.Provider.OpenRouter.BaseURL
 		apiKey = cfg.Provider.OpenRouter.APIKey
+	case config.ProviderCopilot:
+		baseURL = cfg.Provider.Copilot.BaseURL
+		token, err := CopilotToken(cfg)
+		if err != nil {
+			return nil, err
+		}
+		apiKey = token
 	case config.ProviderLocal:
 		return &ollamaClient{
 			provider:        selection.Provider,

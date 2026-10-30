@@ -13,6 +13,7 @@ const (
 	ProviderOpenAI     = "openai"
 	ProviderOpenRouter = "openrouter"
 	ProviderLocal      = "local"
+	ProviderCopilot    = "copilot"
 
 	ModelLevelLight   = "light"
 	ModelLevelDefault = "default"
@@ -56,6 +57,7 @@ type ProviderConfig struct {
 	OpenAI             ProviderDetail `toml:"openai"`
 	OpenRouter         ProviderDetail `toml:"openrouter"`
 	Local              ProviderDetail `toml:"local"`
+	Copilot            ProviderDetail `toml:"copilot"`
 }
 
 // ModelSelection is the provider, model, and request parameters for a model tier.
@@ -63,6 +65,15 @@ type ModelSelection struct {
 	Provider   string
 	Model      string
 	Parameters map[string]any
+}
+
+// ValidProvider reports whether name is a supported provider.
+func ValidProvider(name string) bool {
+	switch name {
+	case ProviderOpenAI, ProviderOpenRouter, ProviderLocal, ProviderCopilot:
+		return true
+	}
+	return false
 }
 
 // ValidModelLevel reports whether level is light, default, or high.
@@ -157,6 +168,9 @@ func DefaultConfig() *Config {
 			},
 			Local: ProviderDetail{
 				BaseURL: "http://localhost:11434/api/generate",
+			},
+			Copilot: ProviderDetail{
+				BaseURL: "https://api.githubcopilot.com",
 			},
 		},
 		Safety: SafetyConfig{

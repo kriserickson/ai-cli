@@ -35,6 +35,7 @@ func TestApplyAction_SetProvider(t *testing.T) {
 	}{
 		{name: "openai", value: "openai", want: "openai"},
 		{name: "openrouter", value: "openrouter", want: "openrouter"},
+		{name: "copilot", value: "copilot", want: "copilot"},
 		{name: "invalid provider", value: "anthropic", wantErr: true},
 		{name: "empty string", value: "", wantErr: true},
 	}

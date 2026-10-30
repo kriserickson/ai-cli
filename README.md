@@ -1,6 +1,6 @@
 # AI CLI
 
-AI CLI translates natural language into shell commands using LLMs (OpenAI, OpenRouter, or a local server), then applies a safety policy before execution.
+AI CLI translates natural language into shell commands using LLMs (OpenAI, OpenRouter, GitHub Copilot, or a local server), then applies a safety policy before execution.
 
 ![AI CLI banner](images/ai-cli-banner.png)
 
@@ -374,7 +374,7 @@ Available `ai config get/set` keys:
 
 | Key | Description | Default |
 |-----|-------------|---------|
-| `provider` | Active provider (`openai`, `openrouter`, or `local`) | `openrouter` |
+| `provider` | Active provider (`openai`, `openrouter`, `local`, or `copilot`) | `openrouter` |
 | `model` | Model identifier | `anthropic/claude-3.5-sonnet` |
 | `provider_light` | Provider for the light tier; blank inherits `provider` | (empty) |
 | `model_light` | Model identifier for `--light` | (empty) |
@@ -403,6 +403,7 @@ Notes:
 - `llm_key` and `llm_url` read and write the key/URL for whichever provider is currently selected
 - `ai config get llm_key` returns a masked value
 - `allowlist_prefixes` exists in config but is currently edited directly in `config.toml`
+- The `copilot` provider uses your GitHub Copilot license through the [GitHub CLI](https://cli.github.com/) login (`gh auth login`), so no `llm_key` is needed. The token is read from `gh auth token` when needed and is not stored in `config.toml`.
 
 ### Model tiers and parameters
 
