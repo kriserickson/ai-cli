@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kriserickson/ai-cli/internal/config"
+	"github.com/kriserickson/ai-cli/internal/llm"
 	"github.com/kriserickson/ai-cli/internal/shell"
 )
 
@@ -86,6 +87,12 @@ func runStatus(_ *cobra.Command, _ []string) error {
 			fmt.Printf("API Key:  %s\n", color.GreenString(maskKey(cfg.Provider.Local.APIKey)))
 		} else {
 			fmt.Printf("API Key:  %s\n", color.YellowString("not set (optional for local)"))
+		}
+	} else if cfg.Provider.Default == config.ProviderCopilot {
+		if _, err := llm.CopilotToken(cfg); err != nil {
+			fmt.Printf("GitHub:   %s\n", color.RedString("not logged in (run: gh auth login)"))
+		} else {
+			fmt.Printf("GitHub:   %s\n", color.GreenString("logged in"))
 		}
 	} else {
 		var apiKey string

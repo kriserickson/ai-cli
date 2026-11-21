@@ -72,9 +72,9 @@ var configKeys = []string{
 
 // configKeyValues provides completion values for keys that have a fixed set of valid inputs.
 var configKeyValues = map[string][]string{
-	keyProvider:                {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	keyProviderLight:           {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
-	keyProviderHigh:            {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal},
+	keyProvider:                {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal, config.ProviderCopilot},
+	keyProviderLight:           {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal, config.ProviderCopilot},
+	keyProviderHigh:            {config.ProviderOpenAI, config.ProviderOpenRouter, config.ProviderLocal, config.ProviderCopilot},
 	keyAlwaysConfirm:           {boolTrue, boolFalse},
 	keyToolCalling:             {config.ToolCallingNever, config.ToolCallingAlwaysPrompt, config.ToolCallingDangerousPrompt, config.ToolCallingAlwaysAllow},
 	keyDebug:                   {config.DebugNone, config.DebugScreen, config.DebugFile},
@@ -172,6 +172,8 @@ func currentProviderDetail(cfg *config.Config) *config.ProviderDetail {
 		return &cfg.Provider.OpenAI
 	case config.ProviderLocal:
 		return &cfg.Provider.Local
+	case config.ProviderCopilot:
+		return &cfg.Provider.Copilot
 	default: // openrouter (the default)
 		return &cfg.Provider.OpenRouter
 	}
@@ -235,8 +237,8 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 func setConfigValue(cfg *config.Config, key, value string) error {
 	switch key {
 	case keyProvider, keyDefault:
-		if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
-			return errors.New("provider must be 'openai', 'openrouter', or 'local'")
+		if err := validateProvider(value); err != nil {
+			return err
 		}
 		cfg.Provider.Default = value
 	case keyModel:
@@ -358,8 +360,8 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 }
 
 func validateProvider(value string) error {
-	if value != config.ProviderOpenAI && value != config.ProviderOpenRouter && value != config.ProviderLocal {
-		return errors.New("provider must be 'openai', 'openrouter', or 'local'")
+	if !config.ValidProvider(value) {
+		return errors.New("provider must be 'openai', 'openrouter', 'local', or 'copilot'")
 	}
 	return nil
 }

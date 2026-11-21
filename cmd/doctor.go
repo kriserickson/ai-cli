@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kriserickson/ai-cli/internal/config"
+	"github.com/kriserickson/ai-cli/internal/llm"
 )
 
 func init() {
@@ -65,6 +66,13 @@ func runDoctor(_ *cobra.Command, _ []string) error {
 			if err := RunModelWizard(cfg); err != nil {
 				return err
 			}
+		}
+	} else if cfg.Provider.Default == config.ProviderCopilot {
+		if _, err := llm.CopilotToken(cfg); err != nil {
+			allPassed = false
+			printCheck("GitHub login", false, err.Error())
+		} else {
+			printCheck("GitHub login", true, "copilot")
 		}
 	} else {
 		var apiKey string

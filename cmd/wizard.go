@@ -16,6 +16,7 @@ const (
 	providerLabelLocal      = "Local"
 	providerLabelOpenAI     = "OpenAI"
 	providerLabelOpenRouter = "OpenRouter"
+	providerLabelCopilot    = "GitHub Copilot"
 
 	paramMaxCompletionTokens = "max_completion_tokens"
 	paramMaxTokens           = "max_tokens"
@@ -34,6 +35,8 @@ var (
 	wizardFetchOpenAIModels = llm.FetchOpenAIModels
 	wizardFetchORModels     = llm.FetchOpenRouterModels
 	wizardFetchLocalModels  = llm.FetchLocalModels
+	wizardFetchCopilot      = llm.FetchCopilotModels
+	wizardCopilotToken      = llm.CopilotToken
 	wizardSaveConfig        = config.Save
 )
 
@@ -54,7 +57,7 @@ func selectFromList(prompt string, options []string) (int, error) {
 }
 
 func pickProvider(current string) (string, error) {
-	options := []string{providerLabelOpenAI, providerLabelOpenRouter, providerLabelLocal}
+	options := []string{providerLabelOpenAI, providerLabelOpenRouter, providerLabelLocal, providerLabelCopilot}
 	defaultProvider := ""
 	switch current {
 	case config.ProviderOpenAI:
@@ -63,6 +66,8 @@ func pickProvider(current string) (string, error) {
 		defaultProvider = options[1]
 	case config.ProviderLocal:
 		defaultProvider = options[2]
+	case config.ProviderCopilot:
+		defaultProvider = options[3]
 	}
 
 	var idx int
@@ -80,8 +85,10 @@ func pickProvider(current string) (string, error) {
 		return config.ProviderOpenAI, nil
 	case 1:
 		return config.ProviderOpenRouter, nil
-	default:
+	case 2:
 		return config.ProviderLocal, nil
+	default:
+		return config.ProviderCopilot, nil
 	}
 }
 
@@ -265,6 +272,11 @@ func ensureAPIKey(cfg *config.Config, provider string) error {
 		// API key is optional for local providers
 		return nil
 	}
+	if provider == config.ProviderCopilot {
+		// Copilot uses the GitHub CLI login instead of a pasted key.
+		_, err := wizardCopilotToken(cfg)
+		return err
+	}
 	var existing string
 	switch provider {
 	case config.ProviderOpenAI:
@@ -337,6 +349,29 @@ func pickModel(cfg *config.Config, provider string) (string, error) {
 			modelIDs[i] = m.ID
 		}
 		idx, err := selectFromList("Select a model:", modelIDs)
+		if err != nil {
+			return "", err
+		}
+		return models[idx].ID, nil
+
+	case config.ProviderCopilot:
+		token, err := wizardCopilotToken(cfg)
+		if err != nil {
+			return "", err
+		}
+		fmt.Println("Fetching available models from GitHub Copilot...")
+		models, err := wizardFetchCopilot(cfg.Provider.Copilot.BaseURL, token)
+		if err != nil {
+			return "", fmt.Errorf("fetch models: %w", err)
+		}
+		if len(models) == 0 {
+			return "", errors.New("no Copilot models available")
+		}
+		modelNames := make([]string, len(models))
+		for i, m := range models {
+			modelNames[i] = fmt.Sprintf("%s (%s)", m.Name, m.ID)
+		}
+		idx, err := selectFromList("Select a model:", modelNames)
 		if err != nil {
 			return "", err
 		}
